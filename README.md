@@ -38,7 +38,7 @@ custom:
 
 ## Publishing and subscribing
 
-Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events.
+Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events. Note that in this plugin scheduling does not work. Only regular subscribers to a custom eventBus is provided.
 
 A simple example configuration in serverless with a Lambda function that publishes an event and a Lambda that subscribes to the event. (example coming soon)
 
@@ -67,21 +67,16 @@ The events handler with two functions (publish and consume)
 ```javascript
   import AWS from 'aws-sdk';
 
-  AWS.config.update({
-    apiVersion: '2015-10-07',
-    accessKeyId: "YOURKEY",
-    secretAccessKey: "YOURSECRET",
-    region: "eu-west-1"
-  });
-
   export const publish = async () => {
     try {
       const eventBridge = new AWS.EventBridge({
         endpoint: 'http://127.0.0.1:4010',
-        region: 'eu-west-1'
+        accessKeyId: "YOURKEY",
+        secretAccessKey: "YOURSECRET",
+        region: "eu-west-1"
       });
 
-      const test = await eventBridge.putEvents({
+      await eventBridge.putEvents({
         Entries: [
           {
             EventBusName: 'marketing',
@@ -91,20 +86,16 @@ The events handler with two functions (publish and consume)
           },
         ]
       }).promise();
-
-      console.log('test', test);
-
+      return { statusCode: 200, body: 'published' };
     } catch (e) {
       console.error(e);
       return { statusCode: 400, body: 'could not publish' };
     }
-    return { statusCode: 200, body: 'published' };
   }
 
   export const consume = async (event, context) => {
     console.log(event);
-    console.log('consume');
-    return { statusCode: 200, body: 'consume' };
+    return { statusCode: 200, body: JSON.stringify(event) };
   }
 ```
 

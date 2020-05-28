@@ -1,9 +1,10 @@
-import express from 'express';
-import cors from 'cors';
-import bodyParser from 'body-parser';
-import AWS from 'aws-sdk';
-import { resolve } from 'path';
-import { spawn } from 'child_process';
+'use strict';
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+// const AWS = require('aws-sdk');
+const { resolve } = require('path');
+const { spawn } = require('child_process');
 
 class ServerlessOfflineAwsEventbridgePlugin {
   constructor(serverless, options) {
@@ -32,7 +33,13 @@ class ServerlessOfflineAwsEventbridgePlugin {
         this.log('checking event subscribers');
         Promise.all(
           req.body.Entries.map(async entry => {
-            this.subscribers.filter(async subscriber => subscriber.event.eventBus === entry.EventBusName).map(async subscriber => {
+            this.subscribers.filter(
+              async subscriber => {
+                const subscribed = subscriber.event.eventBus === entry.EventBusName && subscriber.event.pattern.source.includes(entry.Source);
+                this.log(`${subscriber.functionName} ${subscribed ? 'is' : 'is not'} subscribed`);
+                return subscribed;
+              }
+            ).map(async subscriber => {
               const handler = this.createHandler(subscriber.functionName, subscriber.function);
               await handler()({ event: entry }, {});
             });
@@ -76,11 +83,13 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.location = this.serverless.config.servicePath;
     }
 
-    const endpoint = `http://127.0.0.1:${this.port}`;
-    AWS.config.eventBridge = {
-      endpoint,
-      region: this.region
-    };
+    // const endpoint = `http://127.0.0.1:${this.port}`;
+    // AWS.config.eventBridge = {
+    //   endpoint,
+    //   accessKeyId: this.config.accessKeyId || 'YOURKEY',
+    //   secretAccessKey: this.config.secretAccessKey || 'YOURSECRET',
+    //   region: this.region
+    // };
 
     const subscribers = [];
     Object.keys(this.serverless.service.functions).map(fnName => {
@@ -198,4 +207,4 @@ class ServerlessOfflineAwsEventbridgePlugin {
   }
 }
 
-export default ServerlessOfflineAwsEventbridgePlugin;
+module.exports = ServerlessOfflineAwsEventbridgePlugin;
