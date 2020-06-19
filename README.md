@@ -105,7 +105,7 @@ The events handler with two functions (publish and consume)
         Detail: `{ "E-Mail": "some@someemail.some" }`,
       }
 
-      * If 'convertEvent' flag is true, out output will be
+      * If 'convertEntry' flag is true, out output will be
       {
         version: "0",
         id: "xxxxxxxx-xxxx-xxxx-xxxx-1234443234563",
