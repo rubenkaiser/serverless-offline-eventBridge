@@ -2,7 +2,6 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-// const AWS = require('aws-sdk');
 const { resolve } = require('path');
 const { spawn } = require('child_process');
 
@@ -13,6 +12,8 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.options = options;
     this.config = null;
     this.port = null;
+    this.account = null;
+    this.convertEntry = null;
     this.debug = null;
     this.eventBridgeServer = null;
     this.location = null;
@@ -33,15 +34,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
         this.log('checking event subscribers');
         Promise.all(
           req.body.Entries.map(async entry => {
-            this.subscribers.filter(
-              async subscriber => {
-                const subscribed = subscriber.event.eventBus === entry.EventBusName && subscriber.event.pattern.source.includes(entry.Source);
-                this.log(`${subscriber.functionName} ${subscribed ? 'is' : 'is not'} subscribed`);
-                return subscribed;
-              }
-            ).map(async subscriber => {
-              const handler = this.createHandler(subscriber.functionName, subscriber.function);
-              await handler()({ event: entry }, {});
+            this.subscribers.filter(subscriber => this.verifyIsSubscribed(subscriber, entry))
+              .map(async subscriber => {
+                const handler = this.createHandler(subscriber.functionName, subscriber.function);
+                const event = this.convertEntryToEvent(entry);
+                await handler()(event, {});
             });
           })
         );
@@ -71,6 +68,8 @@ class ServerlessOfflineAwsEventbridgePlugin {
   init() {
     this.config = this.serverless.service.custom['serverless-offline-aws-eventbridge'] || {};
     this.port = this.config.port || 4010;
+    this.account = this.config.account || '';
+    this.convertEntry = this.config.convertEntry || false;
     this.region = this.serverless.service.provider.region || 'us-east-1';
     this.debug = this.config.debug || false;
     const offlineConfig = this.serverless.service.custom['serverless-offline'] || {};
@@ -94,11 +93,29 @@ class ServerlessOfflineAwsEventbridgePlugin {
     const subscribers = [];
     Object.keys(this.serverless.service.functions).map(fnName => {
       const fn = this.serverless.service.functions[fnName];
-      fn.events.filter(event => event.eventBridge != null).map(event => {
-        subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
-      });
+      if (fn.events) {
+        fn.events.filter(event => event.eventBridge != null).map(event => {
+          subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
+        });
+      }
     });
     this.subscribers = subscribers;
+  }
+  
+  verifyIsSubscribed(subscriber, entry) {
+    // Match EventBusName and Source by default
+    const subscribedChecks = [
+      subscriber.event.eventBus.includes(entry.EventBusName), 
+      subscriber.event.pattern.source.includes(entry.Source)
+    ]
+
+    if (entry.DetailType) {
+      subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
+    }
+    
+    const subscribed = subscribedChecks.every(x => x);
+    this.log(`${subscriber.functionName} ${subscribed ? 'is' : 'is not'} subscribed`);
+    return subscribed;
   }
 
   createHandler(fnName, fn) {
@@ -200,6 +217,34 @@ class ServerlessOfflineAwsEventbridgePlugin {
       const handler = require(fullHandlerPath)[handlerFnName];
       return handler;
     };
+  }
+
+  convertEntryToEvent(entry) {
+    if (!this.convertEntry) {
+      return entry;
+    }
+
+    try {
+      const event = {
+        version: '0',
+        id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+        source: entry.Source,
+        account: this.account,
+        time: new Date().toISOString(),
+        region: this.region,
+        resources: [],
+        detail: JSON.parse(entry.Detail)
+      }
+  
+      if (entry.DetailType) {
+        event['detail-type'] = entry.DetailType;
+      }
+  
+      return event;
+    } catch (error) {
+      this.log(`error converting entry to event: ${error.message}. returning entry instead`);
+      return entry;
+    }
   }
 
   log(message) {

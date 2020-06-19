@@ -34,6 +34,8 @@ custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventbridge mock server on
     debug: false # flag to show debug messages
+    account: '' # account id that gets passed to the event
+    convertEntry: false # flag to convert entry to match cloudwatch
 ```
 
 ## Publishing and subscribing
@@ -95,6 +97,30 @@ The events handler with two functions (publish and consume)
 
   export const consume = async (event, context) => {
     console.log(event);
+    /*
+      {
+        EventBusName: 'marketing',
+        Source: 'acme.newsletter.campaign',
+        DetailType: 'UserSignUp',
+        Detail: `{ "E-Mail": "some@someemail.some" }`,
+      }
+
+      * If 'convertEvent' flag is true, out output will be
+      {
+        version: "0",
+        id: "xxxxxxxx-xxxx-xxxx-xxxx-1234443234563",
+        source: "acme.newsletter.campaign",
+        account: "",
+        time: "2020-06-19T16:37:00Z",
+        region: "us-east-1",
+        resources: [],
+        detail: {
+          { 
+            "E-Mail": "some@someemail.some" 
+          }
+        }
+      }
+    */
     return { statusCode: 200, body: JSON.stringify(event) };
   }
 ```
