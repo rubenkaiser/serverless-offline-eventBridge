@@ -109,7 +109,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       subscriber.event.pattern.source.includes(entry.Source)
     ]
 
-    if (entry.DetailType) {
+    if (entry.DetailType && subscriber.event.pattern['detail-type']) {
       subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
     }
     
