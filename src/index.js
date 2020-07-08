@@ -38,7 +38,15 @@ class ServerlessOfflineAwsEventbridgePlugin {
               .map(async subscriber => {
                 const handler = this.createHandler(subscriber.functionName, subscriber.function);
                 const event = this.convertEntryToEvent(entry);
-                await handler()(event, {});
+                await handler()(event, {}, (err, success) => {
+                  if (this.debug) {
+                    if (err) {
+                      this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, `Error:`, err)
+                    } else {
+                      this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, success)
+                    }
+                  }
+                });
             });
           })
         );
@@ -111,6 +119,13 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     if (entry.DetailType && subscriber.event.pattern['detail-type']) {
       subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
+    }
+
+    if (entry.Detail && subscriber.event.pattern['detail']) {
+      const detail = JSON.parse(entry.Detail)
+      Object.keys(subscriber.event.pattern['detail']).forEach((key) => {
+        subscribedChecks.push(subscriber.event.pattern['detail'][key].includes(detail[key]))
+      }) 
     }
     
     const subscribed = subscribedChecks.every(x => x);
