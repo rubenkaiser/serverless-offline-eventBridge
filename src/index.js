@@ -113,21 +113,27 @@ class ServerlessOfflineAwsEventbridgePlugin {
   verifyIsSubscribed(subscriber, entry) {
     // Match EventBusName and Source by default
     const subscribedChecks = [
-      subscriber.event.eventBus.includes(entry.EventBusName), 
-      subscriber.event.pattern.source.includes(entry.Source)
+      subscriber.event.eventBus.includes(entry.EventBusName)
     ]
 
-    if (entry.DetailType && subscriber.event.pattern['detail-type']) {
-      subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
-    }
+    if (subscriber.event.pattern) {
 
-    if (entry.Detail && subscriber.event.pattern['detail']) {
-      const detail = JSON.parse(entry.Detail)
-      Object.keys(subscriber.event.pattern['detail']).forEach((key) => {
-        subscribedChecks.push(subscriber.event.pattern['detail'][key].includes(detail[key]))
-      }) 
+      if (subscriber.event.pattern.source) {
+        subscribedChecks.push(subscriber.event.pattern.source.includes(entry.Source));
+      }
+      
+      if (entry.DetailType && subscriber.event.pattern['detail-type']) {
+        subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
+      }
+  
+      if (entry.Detail && subscriber.event.pattern['detail']) {
+        const detail = JSON.parse(entry.Detail)
+        Object.keys(subscriber.event.pattern['detail']).forEach((key) => {
+          subscribedChecks.push(subscriber.event.pattern['detail'][key].includes(detail[key]))
+        }) 
+      }
     }
-    
+ 
     const subscribed = subscribedChecks.every(x => x);
     this.log(`${subscriber.functionName} ${subscribed ? 'is' : 'is not'} subscribed`);
     return subscribed;
