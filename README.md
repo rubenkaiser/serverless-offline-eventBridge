@@ -19,6 +19,8 @@ Install the plugin
 npm install serverless-offline-aws-eventbridge --save
 ```
 
+Note that if you want to use the beta feature for scheduled events install the 1.3.1 beta version from npm.
+
 Let serverless know about the plugin, also note the order when combined with serverless webpack and offline
 ```YAML
 plugins:
@@ -40,9 +42,11 @@ custom:
 
 ## Publishing and subscribing
 
-Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events. Note that in this plugin scheduling does not work. Only regular subscribers to a custom eventBus is provided.
+Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events. 
 
-A simple example configuration in serverless with a Lambda function that publishes an event and a Lambda that subscribes to the event. (example coming soon)
+Scheduled events are also partially supported in the 1.3.1 beta version (only cron, rate events are coming soon). The cron job must be provided fully as shown in the example below. When a cron fires the event object that is sent along is an empty object.
+
+A simple example configuration in serverless with a Lambda function that publishes an event and a Lambda that subscribes to the event.
 
 ```YAML
 functions:
@@ -61,6 +65,14 @@ functions:
           pattern:
             source:
               - acme.newsletter.campaign
+
+  scheduledEvent:
+    handler: events.scheduled
+    events:
+      - eventBridge:
+          eventBus: marketing
+          # run every 5 minutes
+          schedule: "cron(0/5 * * * ? *)"
 ```
 
 
@@ -122,6 +134,11 @@ The events handler with two functions (publish and consume)
       }
     */
     return { statusCode: 200, body: JSON.stringify(event) };
+  }
+
+  export const scheduled = async (event, context) => {
+    console.log('scheduled event');
+    return { statusCode: 200, body: 'scheduled event' };
   }
 ```
 

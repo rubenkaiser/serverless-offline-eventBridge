@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const cron = require('node-cron');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { resolve } = require('path');
@@ -17,7 +18,41 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.debug = null;
     this.eventBridgeServer = null;
     this.location = null;
-    this.subscribers = null;
+   
+    // build the list of subscribers
+    const subscribers = [];
+    const scheduled = [];
+    Object.keys(this.serverless.service.functions).map(fnName => {
+      const fn = this.serverless.service.functions[fnName];
+      if (fn.events) {
+        fn.events.filter(event => event.eventBridge != null).map(event => {
+          if(event.eventBridge.schedule) {
+            if (event.eventBridge.schedule.indexOf('rate') > -1){
+              // TODO: convert rate to cron job
+              this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, 'unsupported rate used in scheduler');
+            } else {
+              // get the cron job syntax right: cron(0 5 * * ? *)
+              //
+              //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
+              // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
+              // seconds is optional so we don't use it with node-cron
+              let convertedSchedule = `${event.eventBridge.schedule.substring(5, event.eventBridge.schedule.length-3)}`;
+              // replace ? by * for node-cron
+              convertedSchedule = convertedSchedule.split('?').join('*');
+              scheduled.push({
+                schedule: convertedSchedule, 
+                functionName: fnName,
+                function: fn
+              });
+            }
+          } else {
+            subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
+          }
+        });
+      }
+    });
+    this.subscribers = subscribers;
+    this.scheduled = scheduled;
 
     this.app = express();
     this.app.use(cors());
@@ -29,6 +64,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       res.header('Access-Control-Allow-Methods', 'PUT, POST, GET, DELETE, HEAD, OPTIONS');
       next();
     });
+
     this.app.all('*', async (req, res) => {
       if (req.body.Entries) {
         this.log('checking event subscribers');
@@ -39,12 +75,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 const handler = this.createHandler(subscriber.functionName, subscriber.function);
                 const event = this.convertEntryToEvent(entry);
                 await handler()(event, {}, (err, success) => {
-                  if (this.debug) {
-                    if (err) {
-                      this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, `Error:`, err)
-                    } else {
-                      this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, success)
-                    }
+                  if (err) {
+                    this.log(`serverless-offline-aws-eventbridge ::`, `Error:`, err)
+                  } else {
+                    this.log(`serverless-offline-aws-eventbridge ::`, success)
                   }
                 });
             });
@@ -90,6 +124,28 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.location = this.serverless.config.servicePath;
     }
 
+    // cron.schedule('* * * * *', () => {
+    //   console.log('running a task every minute');
+    // });
+
+    // loop the scheduled events and create a cron for them
+    this.scheduled.map(scheduledEvent => {
+      this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, `scheduling ${scheduledEvent.functionName} with cron ${scheduledEvent.schedule}`);
+      cron.schedule(scheduledEvent.schedule, async () => {
+        if (this.debug) {
+          this.log(`serverless-offline-aws-eventbridge ::`, `run scheduled function ${scheduledEvent.functionName}`);
+        }
+        const handler = this.createHandler(scheduledEvent.functionName, scheduledEvent.function);
+        await handler()({}, {}, (err, success) => {
+          if (err) {
+            this.log(`serverless-offline-aws-eventbridge ::`, `Error:`, err)
+          } else {
+            this.log(`serverless-offline-aws-eventbridge ::`, success)
+          }
+        });
+      });
+    });
+
     // const endpoint = `http://127.0.0.1:${this.port}`;
     // AWS.config.eventBridge = {
     //   endpoint,
@@ -97,17 +153,6 @@ class ServerlessOfflineAwsEventbridgePlugin {
     //   secretAccessKey: this.config.secretAccessKey || 'YOURSECRET',
     //   region: this.region
     // };
-
-    const subscribers = [];
-    Object.keys(this.serverless.service.functions).map(fnName => {
-      const fn = this.serverless.service.functions[fnName];
-      if (fn.events) {
-        fn.events.filter(event => event.eventBridge != null).map(event => {
-          subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
-        });
-      }
-    });
-    this.subscribers = subscribers;
   }
   
   verifyIsSubscribed(subscriber, entry) {
@@ -176,7 +221,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
           const str = data.toString();
           if (str) {
             // should we check the debug flag & only log if debug is true?
-            console.log(str);
+            this.log(str);
             results.push(data.toString());
           }
         }
@@ -269,7 +314,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
   }
 
   log(message) {
-    if (this.debug) this.serverless.cli.log(`serverless-offline-aws-eventbridge :: ${message}`);
+    if (this.debug) this.serverless.cli.log(`serverless-offline-aws-eventbridge ${message}`);
   }
 }
 
