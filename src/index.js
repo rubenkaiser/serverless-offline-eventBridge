@@ -18,7 +18,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.debug = null;
     this.eventBridgeServer = null;
     this.location = null;
-   
+
     // build the list of subscribers
     const subscribers = [];
     const scheduled = [];
@@ -40,7 +40,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
               // replace ? by * for node-cron
               convertedSchedule = convertedSchedule.split('?').join('*');
               scheduled.push({
-                schedule: convertedSchedule, 
+                schedule: convertedSchedule,
                 functionName: fnName,
                 function: fn
               });
@@ -94,7 +94,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       'after:offline:start:end': () => this.stop(),
     };
   }
-  
+
   async start() {
     this.log('start');
     this.init();
@@ -154,31 +154,32 @@ class ServerlessOfflineAwsEventbridgePlugin {
     //   region: this.region
     // };
   }
-  
+
   verifyIsSubscribed(subscriber, entry) {
-    // Match EventBusName and Source by default
-    const subscribedChecks = [
-      subscriber.event.eventBus.includes(entry.EventBusName)
-    ]
+    const subscribedChecks = []
+
+    if (subscriber.event.eventBus && entry.EventBusName) {
+      subscribedChecks.push(subscriber.event.eventBus.includes(entry.EventBusName));
+    }
 
     if (subscriber.event.pattern) {
 
       if (subscriber.event.pattern.source) {
         subscribedChecks.push(subscriber.event.pattern.source.includes(entry.Source));
       }
-      
+
       if (entry.DetailType && subscriber.event.pattern['detail-type']) {
         subscribedChecks.push(subscriber.event.pattern['detail-type'].includes(entry.DetailType));
       }
-  
+
       if (entry.Detail && subscriber.event.pattern['detail']) {
         const detail = JSON.parse(entry.Detail)
         Object.keys(subscriber.event.pattern['detail']).forEach((key) => {
           subscribedChecks.push(subscriber.event.pattern['detail'][key].includes(detail[key]))
-        }) 
+        })
       }
     }
- 
+
     const subscribed = subscribedChecks.every(x => x);
     this.log(`${subscriber.functionName} ${subscribed ? 'is' : 'is not'} subscribed`);
     return subscribed;
@@ -301,11 +302,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
         resources: [],
         detail: JSON.parse(entry.Detail)
       }
-  
+
       if (entry.DetailType) {
         event['detail-type'] = entry.DetailType;
       }
-  
+
       return event;
     } catch (error) {
       this.log(`error converting entry to event: ${error.message}. returning entry instead`);
