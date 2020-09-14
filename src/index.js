@@ -47,7 +47,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
                   } else if (parts[1].startsWith("day")) {
                     convertedSchedule = `0 0 */${parts[0]} * *`;
                   } else {
-                    this.log(`Invalid schedule rate syntax '${rate}', will not schedule`);
+                    this.log(
+                      `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
+                    );
                   }
                 }
               } else {
@@ -67,11 +69,15 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 scheduled.push({
                   schedule: convertedSchedule,
                   functionName: fnName,
-                  function: fn
+                  function: fn,
                 });
-                this.log(`Scheduled '${fnName}' with syntax ${convertedSchedule}`);
+                this.log(
+                  `Scheduled '${fnName}' with syntax ${convertedSchedule}`
+                );
               } else {
-                this.log(`Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`);
+                this.log(
+                  `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
+                );
               }
             } else {
               subscribers.push({
