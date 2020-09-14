@@ -44,7 +44,7 @@ custom:
 
 Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events. 
 
-Scheduled events are also partially supported as of 1.3.2 (only cron, rate events are coming soon). The cron job must be provided fully as shown in the example below. When a cron fires the event object that is sent along is an empty object.
+Scheduled events are also supported. When a cron fires the event object that is sent along is an empty object.
 
 A simple example configuration in serverless with a Lambda function that publishes an event and a Lambda that subscribes to the event.
 
