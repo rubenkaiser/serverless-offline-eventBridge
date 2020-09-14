@@ -26,7 +26,6 @@ class ServerlessOfflineAwsEventbridgePlugin {
     Object.keys(this.serverless.service.functions).forEach((fnName) => {
       const fn = this.serverless.service.functions[fnName];
       if (fn.events) {
-<<<<<<< HEAD
         fn.events
           .filter((event) => event.eventBridge != null)
           .forEach((event) => {
@@ -58,58 +57,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
             } else {
               subscribers.push({
                 event: event.eventBridge,
-=======
-        fn.events.filter(event => event.eventBridge != null).map(event => {
-          if(event.eventBridge.schedule) {
-            let convertedSchedule;
-
-            if (event.eventBridge.schedule.indexOf('rate') > -1){
-              const rate = event.eventBridge.schedule
-                .replace('rate(', '')
-                .replace(')', '');
-
-              const parts = rate.split(' ');
-
-              if (parts[1]) {
-                if (parts[1].startsWith('minute')) {
-                  convertedSchedule = `*/${parts[0]} * * * *`;
-                } else if (parts[1].startsWith('hour')) {
-                  convertedSchedule = `0 */${parts[0]} * * *`;
-                } else if (parts[1].startsWith('day')) {
-                  convertedSchedule = `0 0 */${parts[0]} * *`;
-                } else {
-                  this.log(`Invalid schedule rate syntax '${rate}', will not schedule`);
-                }
-              }
-            } else {
-              // get the cron job syntax right: cron(0 5 * * ? *)
-              //
-              //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
-              // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
-              // seconds is optional so we don't use it with node-cron
-              convertedSchedule = `${event.eventBridge.schedule.substring(5, event.eventBridge.schedule.length-3)}`;
-              // replace ? by * for node-cron
-              convertedSchedule = convertedSchedule.split('?').join('*');
-            }
-            if (convertedSchedule) {
-              scheduled.push({
-                schedule: convertedSchedule,
->>>>>>> 45d5af4eb72117994eeb417f797d5902938ad2b7
                 functionName: fnName,
                 function: fn,
               });
             }
-<<<<<<< HEAD
           });
-=======
-            else {
-              this.log(`Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`);
-            }
-          } else {
-            subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
-          }
-        });
->>>>>>> 45d5af4eb72117994eeb417f797d5902938ad2b7
       }
     });
     this.subscribers = subscribers;
