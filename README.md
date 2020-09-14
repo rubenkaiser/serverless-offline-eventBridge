@@ -19,8 +19,6 @@ Install the plugin
 npm install serverless-offline-aws-eventbridge --save
 ```
 
-Note that if you want to use the beta feature for scheduled events install the 1.3.1 beta version from npm.
-
 Let serverless know about the plugin, also note the order when combined with serverless webpack and offline
 ```YAML
 plugins:
