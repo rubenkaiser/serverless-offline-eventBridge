@@ -1,6 +1,6 @@
 {
   "name": "serverless-offline-aws-eventbridge",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Serverless plugin to run eventbridge offline.",
   "main": "src/index.js",
   "author": "Ruben Kaiser",
