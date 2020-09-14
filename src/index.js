@@ -27,23 +27,45 @@ class ServerlessOfflineAwsEventbridgePlugin {
       if (fn.events) {
         fn.events.filter(event => event.eventBridge != null).map(event => {
           if(event.eventBridge.schedule) {
+            let convertedSchedule;
+
             if (event.eventBridge.schedule.indexOf('rate') > -1){
-              // TODO: convert rate to cron job
-              this.serverless.cli.log(`serverless-offline-aws-eventbridge ::`, 'unsupported rate used in scheduler');
+              const rate = event.eventBridge.schedule
+                .replace('rate(', '')
+                .replace(')', '');
+
+              const parts = rate.split(' ');
+
+              if (parts[1]) {
+                if (parts[1].startsWith('minute')) {
+                  convertedSchedule = `*/${parts[0]} * * * *`;
+                } else if (parts[1].startsWith('hour')) {
+                  convertedSchedule = `0 */${parts[0]} * * *`;
+                } else if (parts[1].startsWith('day')) {
+                  convertedSchedule = `0 0 */${parts[0]} * *`;
+                } else {
+                  this.log(`Invalid schedule rate syntax '${rate}', will not schedule`);
+                }
+              }
             } else {
               // get the cron job syntax right: cron(0 5 * * ? *)
               //
               //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
               // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
               // seconds is optional so we don't use it with node-cron
-              let convertedSchedule = `${event.eventBridge.schedule.substring(5, event.eventBridge.schedule.length-3)}`;
+              convertedSchedule = `${event.eventBridge.schedule.substring(5, event.eventBridge.schedule.length-3)}`;
               // replace ? by * for node-cron
               convertedSchedule = convertedSchedule.split('?').join('*');
+            }
+            if (convertedSchedule) {
               scheduled.push({
                 schedule: convertedSchedule,
                 functionName: fnName,
                 function: fn
               });
+            }
+            else {
+              this.log(`Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`);
             }
           } else {
             subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
