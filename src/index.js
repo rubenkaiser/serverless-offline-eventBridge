@@ -31,20 +31,20 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
             if (event.eventBridge.schedule.indexOf('rate') > -1){
               const rate = event.eventBridge.schedule
-                .replace("rate(", "")
-                .replace(")", "");
+                .replace('rate(', '')
+                .replace(')', '');
 
-              const parts = rate.split(" ");
+              const parts = rate.split(' ');
 
               if (parts[1]) {
-                if (parts[1].startsWith("minute")) {
+                if (parts[1].startsWith('minute')) {
                   convertedSchedule = `*/${parts[0]} * * * *`;
-                } else if (parts[1].startsWith("hour")) {
+                } else if (parts[1].startsWith('hour')) {
                   convertedSchedule = `0 */${parts[0]} * * *`;
-                } else if (parts[1].startsWith("day")) {
+                } else if (parts[1].startsWith('day')) {
                   convertedSchedule = `0 0 */${parts[0]} * *`;
                 } else {
-                  this.serverless.cli.log(`serverless-offline-aws-eventbridge :: Invalid schedule rate syntax '${rate}', will not schedule`);
+                  this.log(`Invalid schedule rate syntax '${rate}', will not schedule`);
                 }
               }
             } else {
@@ -65,7 +65,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
               });
             }
             else {
-              this.serverless.cli.log(`serverless-offline-aws-eventbridge :: Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`);
+              this.log(`Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`);
             }
           } else {
             subscribers.push({ event: event.eventBridge, functionName: fnName, function: fn });
