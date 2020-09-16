@@ -139,6 +139,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
           })
         );
       }
+      res.json({
+        Entries: [{EventId:'6ae9cf9e-baf7-ee80-4f0b-21b2a8c471eb'}],
+        FailedEntryCount:0
+      });
       res.status(200).send();
     });
 
