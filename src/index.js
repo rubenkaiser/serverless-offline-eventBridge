@@ -127,19 +127,21 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 const event = this.convertEntryToEvent(entry);
 
                 try {
-                  //const handlerResult = await handler()(event, {});
-                  //await handler(event, {});
                   await handler()(event, {});
                   this.log(`successfully processes event with id ${event.id}`);
                   eventResults.push({
-                    eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`
+                    eventId:
+                      event.id ||
+                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
                   });
                 } catch (err) {
                   this.log(`Error: ${err}`);
                   eventResults.push({
-                    eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                    eventId:
+                      event.id ||
+                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
                     ErrorCode: "code",
-                    ErrorMessage: "message"
+                    ErrorMessage: "message",
                   });
                 }
               });
@@ -147,12 +149,12 @@ class ServerlessOfflineAwsEventbridgePlugin {
         );
         res.json({
           Entries: eventResults,
-          FailedEntryCount: eventResults.filter(e => e.ErrorCode).length,
+          FailedEntryCount: eventResults.filter((e) => e.ErrorCode).length,
         });
       } else {
         res.status(200).send();
       }
-    });      
+    });
 
     this.hooks = {
       "before:offline:start": () => this.start(),
@@ -401,14 +403,16 @@ class ServerlessOfflineAwsEventbridgePlugin {
       );
       return {
         ...entry,
-        id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`
+        id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
       };
     }
   }
 
   log(message) {
     if (this.debug)
-      this.serverless.cli.log(`serverless-offline-aws-eventbridge :: ${message}`);
+      this.serverless.cli.log(
+        `serverless-offline-aws-eventbridge :: ${message}`
+      );
   }
 }
 
