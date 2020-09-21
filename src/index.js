@@ -111,8 +111,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     this.app.all("*", async (req, res) => {
       if (req.body.Entries) {
+        const eventResults = [];
         this.log("checking event subscribers");
-        Promise.all(
+        await Promise.all(
           req.body.Entries.map(async (entry) => {
             this.subscribers
               .filter((subscriber) =>
@@ -124,23 +125,34 @@ class ServerlessOfflineAwsEventbridgePlugin {
                   subscriber.function
                 );
                 const event = this.convertEntryToEvent(entry);
-                await handler()(event, {}, (err, success) => {
-                  if (err) {
-                    this.log(
-                      `serverless-offline-aws-eventbridge ::`,
-                      `Error:`,
-                      err
-                    );
-                  } else {
-                    this.log(`serverless-offline-aws-eventbridge ::`, success);
-                  }
-                });
+
+                try {
+                  //const handlerResult = await handler()(event, {});
+                  //await handler(event, {});
+                  await handler()(event, {});
+                  this.log(`successfully processes event with id ${event.id}`);
+                  eventResults.push({
+                    eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`
+                  });
+                } catch (err) {
+                  this.log(`Error: ${err}`);
+                  eventResults.push({
+                    eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                    ErrorCode: "code",
+                    ErrorMessage: "message"
+                  });
+                }
               });
           })
         );
+        res.json({
+          Entries: eventResults,
+          FailedEntryCount: eventResults.filter(e => e.ErrorCode).length,
+        });
+      } else {
+        res.status(200).send();
       }
-      res.status(200).send();
-    });
+    });      
 
     this.hooks = {
       "before:offline:start": () => this.start(),
@@ -205,9 +217,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
         );
         await handler()({}, {}, (err, success) => {
           if (err) {
-            this.log(`serverless-offline-aws-eventbridge ::`, `Error:`, err);
+            this.log(`Error: ${err}`);
           } else {
-            this.log(`serverless-offline-aws-eventbridge ::`, success);
+            this.log(`Success:`, success);
           }
         });
       });
@@ -265,7 +277,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     if (!fn.runtime || fn.runtime.startsWith("nodejs")) {
       return this.createJavascriptHandler(fn);
     }
-    return this.createProxyHandler(fnName, fn);
+    return () => this.createProxyHandler(fnName, fn);
   }
 
   createProxyHandler(funName, funOptions) {
@@ -366,10 +378,6 @@ class ServerlessOfflineAwsEventbridgePlugin {
   }
 
   convertEntryToEvent(entry) {
-    if (!this.convertEntry) {
-      return entry;
-    }
-
     try {
       const event = {
         version: "0",
@@ -391,13 +399,16 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.log(
         `error converting entry to event: ${error.message}. returning entry instead`
       );
-      return entry;
+      return {
+        ...entry,
+        id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`
+      };
     }
   }
 
   log(message) {
     if (this.debug)
-      this.serverless.cli.log(`serverless-offline-aws-eventbridge ${message}`);
+      this.serverless.cli.log(`serverless-offline-aws-eventbridge :: ${message}`);
   }
 }
 
