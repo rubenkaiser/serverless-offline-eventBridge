@@ -15,16 +15,207 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.config = null;
     this.port = null;
     this.account = null;
-    this.convertEntry = null;
     this.debug = null;
     this.eventBridgeServer = null;
     this.location = null;
 
-    // build the list of subscribers
-    const subscribers = [];
+    this.nonScheduled = [];
+    this.scheduled = [];
+    this.app = null;
+
+    this.hooks = {
+      "before:offline:start": () => this.start(),
+      "before:offline:start:init": () => this.start(),
+      "after:offline:start:end": () => this.stop(),
+    };
+  }
+
+  async start() {
+    this.log("start");
+    this.init();
+    this.eventBridgeServer = this.app.listen(this.port);
+  }
+
+  stop() {
+    this.init();
+    this.log("stop");
+    this.eventBridgeServer.close();
+  }
+
+  init() {
+    this.config =
+      this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
+      {};
+    this.port = this.config.port || 4010;
+    this.account = this.config.account || "";
+    this.region = this.serverless.service.provider.region || "us-east-1";
+    this.debug = this.config.debug || false;
+    const offlineConfig =
+      this.serverless.service.custom["serverless-offline"] || {};
+
+    this.location = process.cwd();
+    const locationRelativeToCwd =
+      this.options.location || offlineConfig.location;
+    if (locationRelativeToCwd) {
+      this.location = `${process.cwd()}/${locationRelativeToCwd}`;
+    } else if (this.serverless.config.servicePath) {
+      this.location = this.serverless.config.servicePath;
+    }
+
+    const subscriptions = this.getSubscriptions(
+      this.serverless.service.functions
+    );
+
+    this.nonScheduled = subscriptions.nonScheduled;
+    this.scheduled = subscriptions.scheduled;
+
+    // loop the scheduled events and create a cron for them
+    this.scheduled.forEach((scheduledEvent) => {
+      this.serverless.cli.log(
+        `serverless-offline-aws-eventbridge ::`,
+        `scheduling ${scheduledEvent.functionName} with cron ${scheduledEvent.schedule}`
+      );
+      cron.schedule(scheduledEvent.schedule, async () => {
+        if (this.debug) {
+          this.log(
+            `serverless-offline-aws-eventbridge ::`,
+            `run scheduled function ${scheduledEvent.functionName}`
+          );
+        }
+        const handler = this.createHandler(
+          scheduledEvent.functionName,
+          scheduledEvent.function
+        );
+        await handler()({}, {}, (err, success) => {
+          if (err) {
+            this.log(`Error: ${err}`);
+          } else {
+            this.log(`Success:`, success);
+          }
+        });
+      });
+    });
+
+    // initialise the express app
+    this.app = express();
+    this.app.use(cors());
+    this.app.use(bodyParser.json({ type: "application/x-amz-json-1.1" }));
+    this.app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
+    this.app.use((req, res, next) => {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, ETag, X-CSRF-Token, Content-Disposition"
+      );
+      res.header(
+        "Access-Control-Allow-Methods",
+        "PUT, POST, GET, DELETE, HEAD, OPTIONS"
+      );
+      next();
+    });
+
+    this.app.all("*", async (req, res) => {
+      if (req.body.Entries) {
+        const eventResults = [];
+        this.log("checking event subscribers");
+        await Promise.all(
+          req.body.Entries.map(async (entry) => {
+            this.nonScheduled
+              .filter((subscriber) =>
+                this.verifyIsSubscribed(subscriber, entry)
+              )
+              .map(async (subscriber) => {
+                const handler = this.createHandler(
+                  subscriber.functionName,
+                  subscriber.function
+                );
+                const event = this.convertEntryToEvent(entry);
+
+                try {
+                  await handler()(event, {});
+                  this.log(`successfully processes event with id ${event.id}`);
+                  eventResults.push({
+                    eventId:
+                      event.id ||
+                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                  });
+                } catch (err) {
+                  this.log(`Error: ${err}`);
+                  eventResults.push({
+                    eventId:
+                      event.id ||
+                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                    ErrorCode: "code",
+                    ErrorMessage: "message",
+                  });
+                }
+              });
+          })
+        );
+        res.json({
+          Entries: eventResults,
+          FailedEntryCount: eventResults.filter((e) => e.ErrorCode).length,
+        });
+      } else {
+        res.status(200).send();
+      }
+    });
+
+    // const endpoint = `http://127.0.0.1:${this.port}`;
+    // AWS.config.eventBridge = {
+    //   endpoint,
+    //   accessKeyId: this.config.accessKeyId || 'YOURKEY',
+    //   secretAccessKey: this.config.secretAccessKey || 'YOURSECRET',
+    //   region: this.region
+    // };
+  }
+
+  verifyIsSubscribed(subscriber, entry) {
+    const subscribedChecks = [];
+
+    if (subscriber.event.eventBus && entry.EventBusName) {
+      subscribedChecks.push(
+        subscriber.event.eventBus.includes(entry.EventBusName)
+      );
+    }
+
+    if (subscriber.event.pattern) {
+      if (subscriber.event.pattern.source) {
+        subscribedChecks.push(
+          subscriber.event.pattern.source.includes(entry.Source)
+        );
+      }
+
+      if (entry.DetailType && subscriber.event.pattern["detail-type"]) {
+        subscribedChecks.push(
+          subscriber.event.pattern["detail-type"].includes(entry.DetailType)
+        );
+      }
+
+      if (entry.Detail && subscriber.event.pattern.detail) {
+        const detail = JSON.parse(entry.Detail);
+        Object.keys(subscriber.event.pattern.detail).forEach((key) => {
+          subscribedChecks.push(
+            subscriber.event.pattern.detail[key].includes(detail[key])
+          );
+        });
+      }
+    }
+
+    const subscribed = subscribedChecks.every((x) => x);
+    this.log(
+      `${subscriber.functionName} ${subscribed ? "is" : "is not"} subscribed`
+    );
+    return subscribed;
+  }
+
+  getSubscriptions(functions) {
+    // build the list of subscribers, nonScheduled and scheduled
+    const nonScheduled = [];
     const scheduled = [];
-    Object.keys(this.serverless.service.functions).forEach((fnName) => {
-      const fn = this.serverless.service.functions[fnName];
+
+    Object.keys(functions).forEach((fnName) => {
+      const fn = functions[fnName];
       if (fn.events) {
         fn.events
           .filter((event) => event.eventBridge != null)
@@ -80,7 +271,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 );
               }
             } else {
-              subscribers.push({
+              nonScheduled.push({
                 event: event.eventBridge,
                 functionName: fnName,
                 function: fn,
@@ -89,190 +280,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
           });
       }
     });
-    this.subscribers = subscribers;
-    this.scheduled = scheduled;
 
-    this.app = express();
-    this.app.use(cors());
-    this.app.use(bodyParser.json({ type: "application/x-amz-json-1.1" }));
-    this.app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
-    this.app.use((req, res, next) => {
-      res.header("Access-Control-Allow-Origin", "*");
-      res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, ETag, X-CSRF-Token, Content-Disposition"
-      );
-      res.header(
-        "Access-Control-Allow-Methods",
-        "PUT, POST, GET, DELETE, HEAD, OPTIONS"
-      );
-      next();
-    });
-
-    this.app.all("*", async (req, res) => {
-      if (req.body.Entries) {
-        const eventResults = [];
-        this.log("checking event subscribers");
-        await Promise.all(
-          req.body.Entries.map(async (entry) => {
-            this.subscribers
-              .filter((subscriber) =>
-                this.verifyIsSubscribed(subscriber, entry)
-              )
-              .map(async (subscriber) => {
-                const handler = this.createHandler(
-                  subscriber.functionName,
-                  subscriber.function
-                );
-                const event = this.convertEntryToEvent(entry);
-
-                try {
-                  await handler()(event, {});
-                  this.log(`successfully processes event with id ${event.id}`);
-                  eventResults.push({
-                    eventId:
-                      event.id ||
-                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                  });
-                } catch (err) {
-                  this.log(`Error: ${err}`);
-                  eventResults.push({
-                    eventId:
-                      event.id ||
-                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                    ErrorCode: "code",
-                    ErrorMessage: "message",
-                  });
-                }
-              });
-          })
-        );
-        res.json({
-          Entries: eventResults,
-          FailedEntryCount: eventResults.filter((e) => e.ErrorCode).length,
-        });
-      } else {
-        res.status(200).send();
-      }
-    });
-
-    this.hooks = {
-      "before:offline:start": () => this.start(),
-      "before:offline:start:init": () => this.start(),
-      "after:offline:start:end": () => this.stop(),
+    return {
+      nonScheduled,
+      scheduled,
     };
-  }
-
-  async start() {
-    this.log("start");
-    this.init();
-    this.eventBridgeServer = this.app.listen(this.port);
-  }
-
-  stop() {
-    this.init();
-    this.log("stop");
-    this.eventBridgeServer.close();
-  }
-
-  init() {
-    this.config =
-      this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
-      {};
-    this.port = this.config.port || 4010;
-    this.account = this.config.account || "";
-    this.convertEntry = this.config.convertEntry || false;
-    this.region = this.serverless.service.provider.region || "us-east-1";
-    this.debug = this.config.debug || false;
-    const offlineConfig =
-      this.serverless.service.custom["serverless-offline"] || {};
-
-    this.location = process.cwd();
-    const locationRelativeToCwd =
-      this.options.location || offlineConfig.location;
-    if (locationRelativeToCwd) {
-      this.location = `${process.cwd()}/${locationRelativeToCwd}`;
-    } else if (this.serverless.config.servicePath) {
-      this.location = this.serverless.config.servicePath;
-    }
-
-    // cron.schedule('* * * * *', () => {
-    //   console.log('running a task every minute');
-    // });
-
-    // loop the scheduled events and create a cron for them
-    this.scheduled.forEach((scheduledEvent) => {
-      this.serverless.cli.log(
-        `serverless-offline-aws-eventbridge ::`,
-        `scheduling ${scheduledEvent.functionName} with cron ${scheduledEvent.schedule}`
-      );
-      cron.schedule(scheduledEvent.schedule, async () => {
-        if (this.debug) {
-          this.log(
-            `serverless-offline-aws-eventbridge ::`,
-            `run scheduled function ${scheduledEvent.functionName}`
-          );
-        }
-        const handler = this.createHandler(
-          scheduledEvent.functionName,
-          scheduledEvent.function
-        );
-        await handler()({}, {}, (err, success) => {
-          if (err) {
-            this.log(`Error: ${err}`);
-          } else {
-            this.log(`Success:`, success);
-          }
-        });
-      });
-    });
-
-    // const endpoint = `http://127.0.0.1:${this.port}`;
-    // AWS.config.eventBridge = {
-    //   endpoint,
-    //   accessKeyId: this.config.accessKeyId || 'YOURKEY',
-    //   secretAccessKey: this.config.secretAccessKey || 'YOURSECRET',
-    //   region: this.region
-    // };
-  }
-
-  verifyIsSubscribed(subscriber, entry) {
-    const subscribedChecks = [];
-
-    if (subscriber.event.eventBus && entry.EventBusName) {
-      subscribedChecks.push(
-        subscriber.event.eventBus.includes(entry.EventBusName)
-      );
-    }
-
-    if (subscriber.event.pattern) {
-      if (subscriber.event.pattern.source) {
-        subscribedChecks.push(
-          subscriber.event.pattern.source.includes(entry.Source)
-        );
-      }
-
-      if (entry.DetailType && subscriber.event.pattern["detail-type"]) {
-        subscribedChecks.push(
-          subscriber.event.pattern["detail-type"].includes(entry.DetailType)
-        );
-      }
-
-      if (entry.Detail && subscriber.event.pattern.detail) {
-        const detail = JSON.parse(entry.Detail);
-        Object.keys(subscriber.event.pattern.detail).forEach((key) => {
-          subscribedChecks.push(
-            subscriber.event.pattern.detail[key].includes(detail[key])
-          );
-        });
-      }
-    }
-
-    const subscribed = subscribedChecks.every((x) => x);
-    this.log(
-      `${subscriber.functionName} ${subscribed ? "is" : "is not"} subscribed`
-    );
-    return subscribed;
   }
 
   createHandler(fnName, fn) {
