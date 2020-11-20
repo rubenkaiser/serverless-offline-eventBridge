@@ -33,8 +33,6 @@ module.exports = {
     "no-underscore-dangle": "off",
     // we turn this off here, for all commonjs modules (e.g. test fixtures etc.)
     strict: ["off"],
-
-    // TODO FIXME turn off temporary, to make eslint pass
     "class-methods-use-this": "off",
     "lines-between-class-members": "off",
     "no-console": "off",

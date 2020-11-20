@@ -1,12 +1,11 @@
 {
   "name": "serverless-offline-aws-eventbridge",
-  "version": "1.4.0-beta.2",
+  "version": "1.4.0-beta.3",
   "description": "Serverless plugin to run eventbridge offline.",
   "main": "src/index.js",
   "author": "Ruben Kaiser",
   "license": "MIT",
   "scripts": {
-    "postinstall": "husky install",
     "lint": "eslint .",
     "format": "eslint . --fix",
     "prepublishOnly": "npm run lint"
@@ -17,7 +16,6 @@
     "eslint-config-prettier": "^6.11.0",
     "eslint-plugin-import": "^2.22.0",
     "eslint-plugin-prettier": "^3.1.4",
-    "husky": "^5.0.1",
     "prettier": "^2.1.1"
   },
   "dependencies": {
