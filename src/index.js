@@ -194,11 +194,30 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
       if (entry.Detail && subscriber.event.pattern.detail) {
         const detail = JSON.parse(entry.Detail);
-        Object.keys(subscriber.event.pattern.detail).forEach((key) => {
-          subscribedChecks.push(
-            subscriber.event.pattern.detail[key].includes(detail[key])
-          );
-        });
+
+        const flattenedDetailObject = this.flattenObject(detail);
+        const flattenedPatternDetailObject = this.flattenObject(
+          subscriber.event.pattern.detail
+        );
+
+        // if the length of the two doesn't match push a false in the subscription
+        if (
+          Object.keys(flattenedPatternDetailObject).length !==
+          Object.keys(flattenedDetailObject).length
+        ) {
+          subscribedChecks.push(false);
+        } else {
+          // check for existence of every value in the pattern in the provided value
+          for (const [key, value] of Object.entries(
+            flattenedPatternDetailObject
+          )) {
+            subscribedChecks.push(
+              flattenedDetailObject[key]
+                ? value.includes(flattenedDetailObject[key])
+                : false
+            );
+          }
+        }
       }
     }
 
@@ -418,6 +437,26 @@ class ServerlessOfflineAwsEventbridgePlugin {
         id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
       };
     }
+  }
+
+  flattenObject(obj) {
+    const flattened = {};
+    for (const i in obj) {
+      // eslint-disable-next-line no-prototype-builtins
+      if (!obj.hasOwnProperty(i)) {
+        if (typeof obj[i] === "object" && !Array.isArray(obj[i])) {
+          const flatObject = this.flattenObject(obj[i]);
+          for (const x in flatObject) {
+            // eslint-disable-next-line no-prototype-builtins
+            if (!flatObject.hasOwnProperty(x))
+              flattened[`${i}.${x}`] = flatObject[x];
+          }
+        } else {
+          flattened[i] = obj[i];
+        }
+      }
+    }
+    return flattened;
   }
 
   log(message) {
