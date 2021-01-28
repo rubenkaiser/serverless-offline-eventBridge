@@ -1,16 +1,16 @@
 "use strict";
 
 const express = require("express");
+const cron = require("node-cron");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-// eslint-disable-next-line import/no-unresolved
-const Lambda = require("serverless-offline/dist/lambda").default;
+const { resolve } = require("path");
+const { spawn } = require("child_process");
 
 class ServerlessOfflineAwsEventbridgePlugin {
   constructor(serverless, options) {
     this.log("construct");
     this.serverless = serverless;
-    this.lambda = null;
     this.options = options;
     this.config = null;
     this.port = null;
@@ -19,7 +19,8 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.eventBridgeServer = null;
     this.location = null;
 
-    this.subscribers = [];
+    this.nonScheduled = [];
+    this.scheduled = [];
     this.app = null;
 
     this.hooks = {
@@ -35,11 +36,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.eventBridgeServer = this.app.listen(this.port);
   }
 
-  async stop() {
+  stop() {
     this.init();
     this.log("stop");
     this.eventBridgeServer.close();
-    if (this.lambda) await this.lambda.cleanup();
   }
 
   init() {
@@ -62,10 +62,39 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.location = this.serverless.config.servicePath;
     }
 
-    const { subscribers, lambdas } = this._getEvents();
+    const subscriptions = this.getSubscriptions(
+      this.serverless.service.functions
+    );
 
-    this._createLambda(lambdas);
-    this.subscribers = subscribers;
+    this.nonScheduled = subscriptions.nonScheduled;
+    this.scheduled = subscriptions.scheduled;
+
+    // loop the scheduled events and create a cron for them
+    this.scheduled.forEach((scheduledEvent) => {
+      this.serverless.cli.log(
+        `serverless-offline-aws-eventbridge ::`,
+        `scheduling ${scheduledEvent.functionName} with cron ${scheduledEvent.schedule}`
+      );
+      cron.schedule(scheduledEvent.schedule, async () => {
+        if (this.debug) {
+          this.log(
+            `serverless-offline-aws-eventbridge ::`,
+            `run scheduled function ${scheduledEvent.functionName}`
+          );
+        }
+        const handler = this.createHandler(
+          scheduledEvent.functionName,
+          scheduledEvent.function
+        );
+        await handler()({}, {}, (err, success) => {
+          if (err) {
+            this.log(`Error: ${err}`);
+          } else {
+            this.log(`Success:`, success);
+          }
+        });
+      });
+    });
 
     // initialise the express app
     this.app = express();
@@ -91,16 +120,19 @@ class ServerlessOfflineAwsEventbridgePlugin {
         this.log("checking event subscribers");
         await Promise.all(
           req.body.Entries.map(async (entry) => {
-            this.subscribers
+            this.nonScheduled
               .filter((subscriber) =>
                 this.verifyIsSubscribed(subscriber, entry)
               )
-              .map(async ({ functionKey }) => {
-                const lambdaFunction = this.lambda.get(functionKey);
+              .map(async (subscriber) => {
+                const handler = this.createHandler(
+                  subscriber.functionName,
+                  subscriber.function
+                );
                 const event = this.convertEntryToEvent(entry);
-                lambdaFunction.setEvent(event);
+
                 try {
-                  await lambdaFunction.runHandler();
+                  await handler()(event, {});
                   this.log(`successfully processes event with id ${event.id}`);
                   eventResults.push({
                     eventId:
@@ -128,11 +160,14 @@ class ServerlessOfflineAwsEventbridgePlugin {
         res.status(200).send();
       }
     });
-  }
 
-  _createLambda(lambdas) {
-    this.lambda = new Lambda(this.serverless, this.options);
-    this.lambda.create(lambdas);
+    // const endpoint = `http://127.0.0.1:${this.port}`;
+    // AWS.config.eventBridge = {
+    //   endpoint,
+    //   accessKeyId: this.config.accessKeyId || 'YOURKEY',
+    //   secretAccessKey: this.config.secretAccessKey || 'YOURSECRET',
+    //   region: this.region
+    // };
   }
 
   verifyIsSubscribed(subscriber, entry) {
@@ -193,32 +228,185 @@ class ServerlessOfflineAwsEventbridgePlugin {
     return subscribed;
   }
 
-  _getEvents() {
-    const { service } = this.serverless;
-    const functionKeys = service.getAllFunctions();
-    const subscribers = [];
-    const lambdas = [];
+  getSubscriptions(functions) {
+    // build the list of subscribers, nonScheduled and scheduled
+    const nonScheduled = [];
+    const scheduled = [];
 
-    for (const functionKey of functionKeys) {
-      const functionDefinition = service.getFunction(functionKey);
+    Object.keys(functions).forEach((fnName) => {
+      const fn = functions[fnName];
+      if (fn.events) {
+        fn.events
+          .filter((event) => event.eventBridge != null)
+          .forEach((event) => {
+            if (event.eventBridge.schedule) {
+              let convertedSchedule;
 
-      lambdas.push({ functionKey, functionDefinition });
+              if (event.eventBridge.schedule.indexOf("rate") > -1) {
+                const rate = event.eventBridge.schedule
+                  .replace("rate(", "")
+                  .replace(")", "");
 
-      if (functionDefinition.events) {
-        for (const event of functionDefinition.events) {
-          if (event.eventBridge && !event.eventBridge.schedule) {
-            subscribers.push({
-              event: event.eventBridge,
-              functionKey,
-            });
-          }
-        }
+                const parts = rate.split(" ");
+
+                if (parts[1]) {
+                  if (parts[1].startsWith("minute")) {
+                    convertedSchedule = `*/${parts[0]} * * * *`;
+                  } else if (parts[1].startsWith("hour")) {
+                    convertedSchedule = `0 */${parts[0]} * * *`;
+                  } else if (parts[1].startsWith("day")) {
+                    convertedSchedule = `0 0 */${parts[0]} * *`;
+                  } else {
+                    this.log(
+                      `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
+                    );
+                  }
+                }
+              } else {
+                // get the cron job syntax right: cron(0 5 * * ? *)
+                //
+                //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
+                // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
+                // seconds is optional so we don't use it with node-cron
+                convertedSchedule = `${event.eventBridge.schedule.substring(
+                  5,
+                  event.eventBridge.schedule.length - 3
+                )}`;
+                // replace ? by * for node-cron
+                convertedSchedule = convertedSchedule.split("?").join("*");
+              }
+              if (convertedSchedule) {
+                scheduled.push({
+                  schedule: convertedSchedule,
+                  functionName: fnName,
+                  function: fn,
+                });
+                this.log(
+                  `Scheduled '${fnName}' with syntax ${convertedSchedule}`
+                );
+              } else {
+                this.log(
+                  `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
+                );
+              }
+            } else {
+              nonScheduled.push({
+                event: event.eventBridge,
+                functionName: fnName,
+                function: fn,
+              });
+            }
+          });
       }
-    }
+    });
 
     return {
-      subscribers,
-      lambdas,
+      nonScheduled,
+      scheduled,
+    };
+  }
+
+  createHandler(fnName, fn) {
+    if (!fn.runtime || fn.runtime.startsWith("nodejs")) {
+      return this.createJavascriptHandler(fn);
+    }
+    return () => this.createProxyHandler(fnName, fn);
+  }
+
+  createProxyHandler(funName, funOptions) {
+    const { options } = this;
+    return (event, context) => {
+      const args = ["invoke", "local", "-f", funName];
+      const stage = options.s || options.stage;
+
+      if (stage) {
+        args.push("-s", stage);
+      }
+
+      const cmd = "sls";
+
+      const process = spawn(cmd, args, {
+        cwd: funOptions.servicePath,
+        shell: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      process.stdin.write(`${JSON.stringify(event)}\n`);
+      process.stdin.end();
+
+      const results = [];
+      let error = false;
+
+      process.stdout.on("data", (data) => {
+        if (data) {
+          const str = data.toString();
+          if (str) {
+            // should we check the debug flag & only log if debug is true?
+            this.log(str);
+            results.push(data.toString());
+          }
+        }
+      });
+
+      process.stderr.on("data", (data) => {
+        error = true;
+        console.warn("error", data);
+        context.fail(data);
+      });
+
+      process.on("close", () => {
+        if (!error) {
+          let response = null;
+          // eslint-disable-next-line no-plusplus
+          for (let i = results.length - 1; i >= 0; i--) {
+            const item = results[i];
+            const firstCurly = item.indexOf("{");
+            const firstSquare = item.indexOf("[");
+            let start = 0;
+            let end = item.length;
+            if (firstCurly === -1 && firstSquare === -1) {
+              // no json found
+              // eslint-disable-next-line no-continue
+              continue;
+            }
+            if (firstSquare === -1 || firstCurly < firstSquare) {
+              // found an object
+              start = firstCurly;
+              end = item.lastIndexOf("}") + 1;
+            } else if (firstCurly === -1 || firstSquare < firstCurly) {
+              // found an array
+              start = firstSquare;
+              end = item.lastIndexOf("]") + 1;
+            }
+
+            try {
+              response = JSON.parse(item.substring(start, end));
+              break;
+            } catch (err) {
+              // not json, check the next one
+              // eslint-disable-next-line no-continue
+              continue;
+            }
+          }
+          if (response !== null) {
+            context.succeed(response);
+          } else {
+            context.succeed(results.join("\n"));
+          }
+        }
+      });
+    };
+  }
+
+  createJavascriptHandler(fn) {
+    return () => {
+      const handlerFnNameIndex = fn.handler.lastIndexOf(".");
+      const handlerPath = fn.handler.substring(0, handlerFnNameIndex);
+      const handlerFnName = fn.handler.substring(handlerFnNameIndex + 1);
+      const fullHandlerPath = resolve(this.location, handlerPath);
+      // eslint-disable-next-line global-require, import/no-dynamic-require
+      const handler = require(fullHandlerPath)[handlerFnName];
+      return handler;
     };
   }
 
