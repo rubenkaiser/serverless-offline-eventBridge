@@ -1,6 +1,6 @@
 {
   "name": "serverless-offline-aws-eventbridge",
-  "version": "1.4.0-beta.3",
+  "version": "1.4.0",
   "description": "Serverless plugin to run eventbridge offline.",
   "main": "src/index.js",
   "author": "Ruben Kaiser",
@@ -21,9 +21,11 @@
   "dependencies": {
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
-    "express": "^4.17.1",
-    "node-cron": "^2.0.3"
+    "express": "^4.17.1"
   },
+  "peerDependencies": {
+		"serverless-offline": "^6.7.0"
+	},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rubenkaiser/serverless-offline-eventBridge.git"
