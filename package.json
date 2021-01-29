@@ -24,8 +24,8 @@
     "express": "^4.17.1"
   },
   "peerDependencies": {
-		"serverless-offline": "^6.7.0"
-	},
+    "serverless-offline": "^6.7.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rubenkaiser/serverless-offline-eventBridge.git"
