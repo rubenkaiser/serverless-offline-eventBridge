@@ -1,5 +1,5 @@
 # serverless-offline-aws-eventbridge
-A serverless offline plugin that enables aws eventBridge events
+A serverless offline plugin that enables aws eventBridge events. As of version 1.4.0 this plugin also supports non javascript handlers.
 
 [![serverless](http://public.serverless.com/badges/v3.svg)](http://www.serverless.com)
 [![npm version](https://badge.fury.io/js/serverless-offline-aws-eventbridge.svg)](https://badge.fury.io/js/serverless-offline-aws-eventbridge)
@@ -39,7 +39,7 @@ custom:
 
 ## Publishing and subscribing
 
-Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events. 
+Checkout the documentation for AWS eventbridge in serverless framework and the AWS SDK for publishing and subscribing to events.
 
 Scheduled events are also supported. When a cron fires the event object that is sent along is an empty object.
 
@@ -127,4 +127,4 @@ The events handler with two functions (publish and consume)
 This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
 
 ## Thanks
-This plugin was inspired by the serverless-offline-sns plugin
+This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans and @JamesKyburz for their PR's.
