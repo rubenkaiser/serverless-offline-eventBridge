@@ -191,7 +191,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     const subscribed = subscribedChecks.every((x) => x);
     this.log(
-      `${subscriber.functionName} ${subscribed ? "is" : "is not"} subscribed`
+      `${subscriber.functionKey} ${subscribed ? "is" : "is not"} subscribed`
     );
     return subscribed;
   }
