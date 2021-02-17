@@ -254,24 +254,17 @@ class ServerlessOfflineAwsEventbridgePlugin {
     }
   }
 
-  flattenObject(obj) {
-    const flattened = {};
-    for (const i in obj) {
-      // eslint-disable-next-line no-prototype-builtins
-      if (!obj.hasOwnProperty(i)) {
-        if (typeof obj[i] === "object" && !Array.isArray(obj[i])) {
-          const flatObject = this.flattenObject(obj[i]);
-          for (const x in flatObject) {
-            // eslint-disable-next-line no-prototype-builtins
-            if (!flatObject.hasOwnProperty(x))
-              flattened[`${i}.${x}`] = flatObject[x];
-          }
-        } else {
-          flattened[i] = obj[i];
-        }
-      }
-    }
-    return flattened;
+  flattenObject(object, prefix = "") {
+    return Object.entries(object).reduce(
+      (accumulator, [key, value]) =>
+        value && value instanceof Object && !(value instanceof Date)
+          ? {
+              ...accumulator,
+              ...this.flattenObject(value, (prefix && prefix + ".") + key),
+            }
+          : { ...accumulator, [(prefix && prefix + ".") + key]: value },
+      {}
+    );
   }
 
   log(message) {
