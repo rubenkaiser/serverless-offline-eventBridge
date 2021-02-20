@@ -65,6 +65,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
       ...offlineEventBridgeOptions,
     };
 
+    if (typeof this.options.maximumRetryAttempts === "undefined") {
+      this.options.maximumRetryAttempts = 10;
+    }
+
     const { subscribers, lambdas } = this.getEvents();
 
     this.createLambda(lambdas);
@@ -99,26 +103,46 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 this.verifyIsSubscribed(subscriber, entry)
               )
               .map(async ({ functionKey }) => {
-                const lambdaFunction = this.lambda.get(functionKey);
-                const event = this.convertEntryToEvent(entry);
-                lambdaFunction.setEvent(event);
-                try {
-                  await lambdaFunction.runHandler();
-                  this.log(`successfully processes event with id ${event.id}`);
-                  eventResults.push({
-                    eventId:
-                      event.id ||
-                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                  });
-                } catch (err) {
-                  this.log(`Error: ${err}`);
-                  eventResults.push({
-                    eventId:
-                      event.id ||
-                      `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                    ErrorCode: "code",
-                    ErrorMessage: "message",
-                  });
+                let retries = 0;
+                const maxRetries = this.options.maximumRetryAttempts;
+                while (retries < maxRetries || maxRetries === 0) {
+                  const lambdaFunction = this.lambda.get(functionKey);
+                  const event = this.convertEntryToEvent(entry);
+                  lambdaFunction.setEvent(event);
+                  try {
+                    // eslint-disable-next-line no-await-in-loop
+                    await lambdaFunction.runHandler();
+                    this.log(
+                      `successfully processes event with id ${event.id}`
+                    );
+                    eventResults.push({
+                      eventId:
+                        event.id ||
+                        `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                    });
+                    break;
+                  } catch (err) {
+                    if (retries < maxRetries) {
+                      this.log(
+                        `error: ${err} occured on ${retries}/${maxRetries}, will retry`
+                      );
+                    } else {
+                      this.log(
+                        `error: ${err} occured on attempt ${retries}, max attempts reached`
+                      );
+                      eventResults.push({
+                        eventId:
+                          event.id ||
+                          `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+                        ErrorCode: "code",
+                        ErrorMessage: "message",
+                      });
+                      break;
+                    }
+                    // eslint-disable-next-line no-await-in-loop
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    retries += 1;
+                  }
                 }
               });
           })

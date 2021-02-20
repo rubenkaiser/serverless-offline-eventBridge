@@ -29,12 +29,14 @@ plugins:
 
 Configuring the plugin
 
+optional options shown with defaults
 ```YAML
 custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventbridge mock server on
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
+    maximumRetryAttempts: 10 # maximumRetryAttempts to retry lambda
 ```
 
 ## Publishing and subscribing
