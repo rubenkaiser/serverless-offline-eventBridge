@@ -168,23 +168,15 @@ class ServerlessOfflineAwsEventbridgePlugin {
           subscriber.event.pattern.detail
         );
 
-        // if the length of the two doesn't match push a false in the subscription
-        if (
-          Object.keys(flattenedPatternDetailObject).length !==
-          Object.keys(flattenedDetailObject).length
-        ) {
-          subscribedChecks.push(false);
-        } else {
-          // check for existence of every value in the pattern in the provided value
-          for (const [key, value] of Object.entries(
-            flattenedPatternDetailObject
-          )) {
-            subscribedChecks.push(
-              flattenedDetailObject[key]
-                ? value.includes(flattenedDetailObject[key])
-                : false
-            );
-          }
+        // check for existence of every value in the pattern in the provided value
+        for (const [key, value] of Object.entries(
+          flattenedPatternDetailObject
+        )) {
+          subscribedChecks.push(
+            flattenedDetailObject[key]
+              ? value.includes(flattenedDetailObject[key])
+              : false
+          );
         }
       }
     }
