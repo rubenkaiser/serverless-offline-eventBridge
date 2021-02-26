@@ -252,9 +252,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
         value && value instanceof Object && !(value instanceof Date)
           ? {
               ...accumulator,
-              ...this.flattenObject(value, (prefix && prefix + ".") + key),
+              ...this.flattenObject(value, (prefix && `${prefix}.`) + key),
             }
-          : { ...accumulator, [(prefix && prefix + ".") + key]: value },
+          : { ...accumulator, [(prefix && `${prefix}.`) + key]: value },
       {}
     );
   }
