@@ -127,4 +127,4 @@ The events handler with two functions (publish and consume)
 This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
 
 ## Thanks
-This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans and @JamesKyburz for their PR's.
+This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans, @JamesKyburz and @plumsirawit for their PR's.
