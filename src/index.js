@@ -69,6 +69,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.options.maximumRetryAttempts = 10;
     }
 
+    if (typeof this.options.retryDelayMs === "undefined") {
+      this.options.retryDelayMs = 500;
+    }
+
     const { subscribers, lambdas } = this.getEvents();
 
     this.createLambda(lambdas);
@@ -93,60 +97,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
     });
 
     this.app.all("*", async (req, res) => {
-      if (req.body.Entries) {
-        const eventResults = [];
-        this.log("checking event subscribers");
-        await Promise.all(
-          req.body.Entries.map(async (entry) => {
-            this.subscribers
-              .filter((subscriber) =>
-                this.verifyIsSubscribed(subscriber, entry)
-              )
-              .map(async ({ functionKey }) => {
-                let retries = 0;
-                const maxRetries = this.options.maximumRetryAttempts;
-                while (retries < maxRetries || maxRetries === 0) {
-                  const lambdaFunction = this.lambda.get(functionKey);
-                  const event = this.convertEntryToEvent(entry);
-                  lambdaFunction.setEvent(event);
-                  try {
-                    // eslint-disable-next-line no-await-in-loop
-                    await lambdaFunction.runHandler();
-                    this.log(
-                      `successfully processes event with id ${event.id}`
-                    );
-                    eventResults.push({
-                      eventId:
-                        event.id ||
-                        `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                    });
-                    break;
-                  } catch (err) {
-                    if (retries < maxRetries) {
-                      this.log(
-                        `error: ${err} occured on ${retries}/${maxRetries}, will retry`
-                      );
-                    } else {
-                      this.log(
-                        `error: ${err} occured on attempt ${retries}, max attempts reached`
-                      );
-                      eventResults.push({
-                        eventId:
-                          event.id ||
-                          `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-                        ErrorCode: "code",
-                        ErrorMessage: "message",
-                      });
-                      break;
-                    }
-                    // eslint-disable-next-line no-await-in-loop
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                    retries += 1;
-                  }
-                }
-              });
-          })
-        );
+      const invokedLambdas = this.invokeSubscribers(req.body.Entries);
+      if (invokedLambdas.length) {
+        const eventResults = await Promise.all(invokedLambdas);
         res.json({
           Entries: eventResults,
           FailedEntryCount: eventResults.filter((e) => e.ErrorCode).length,
@@ -155,6 +108,55 @@ class ServerlessOfflineAwsEventbridgePlugin {
         res.status(200).send();
       }
     });
+  }
+
+  invokeSubscribers(entries) {
+    if (!entries) return [];
+    this.log("checking event subscribers");
+
+    const invoked = [];
+
+    for (const entry of entries) {
+      for (const { functionKey } of this.subscribers.filter((subscriber) =>
+        this.verifyIsSubscribed(subscriber, entry)
+      )) {
+        invoked.push(this.invokeSubscriber(functionKey, entry));
+      }
+    }
+
+    return invoked;
+  }
+
+  async invokeSubscriber(functionKey, entry, retry = 0) {
+    const { retryDelayMs, maximumRetryAttempts: maxRetries } = this.options;
+    const lambdaFunction = this.lambda.get(functionKey);
+    const event = this.convertEntryToEvent(entry);
+    lambdaFunction.setEvent(event);
+    try {
+      await lambdaFunction.runHandler();
+      this.log(
+        `${functionKey} successfully processed event with id ${event.id}`
+      );
+      return {
+        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+      };
+    } catch (err) {
+      if (retry < maxRetries) {
+        this.log(
+          `error: ${err} occured in ${functionKey} on ${retry}/${maxRetries}, will retry`
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        return this.invokeSubscriber(functionKey, entry, retry + 1);
+      }
+      this.log(
+        `error: ${err} occured in ${functionKey} on attempt ${retry}, max attempts reached`
+      );
+      return {
+        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+        ErrorCode: "code",
+        ErrorMessage: "message",
+      };
+    }
   }
 
   createLambda(lambdas) {

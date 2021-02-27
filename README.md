@@ -37,6 +37,7 @@ custom:
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     maximumRetryAttempts: 10 # maximumRetryAttempts to retry lambda
+    retryDelayMs: 500 # retry delay
 ```
 
 ## Publishing and subscribing
