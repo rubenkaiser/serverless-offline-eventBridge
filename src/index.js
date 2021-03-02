@@ -15,9 +15,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.port = null;
     this.account = null;
     this.debug = null;
+    this.importedEventBuses = {};
     this.eventBridgeServer = null;
     this.location = null;
 
+    this.eventBuses = {};
     this.subscribers = [];
     this.app = null;
 
@@ -49,6 +51,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
     this.debug = this.config.debug || false;
+    this.importedEventBuses = this.config["imported-event-buses"] || {};
 
     const {
       service: { custom = {}, provider },
@@ -75,6 +78,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     const { subscribers, lambdas } = this.getEvents();
 
+    this.eventBuses = this.extractCustomBuses();
     this.createLambda(lambdas);
     this.subscribers = subscribers;
 
@@ -108,6 +112,24 @@ class ServerlessOfflineAwsEventbridgePlugin {
         res.status(200).send();
       }
     });
+  }
+
+  extractCustomBuses() {
+    const {
+      service: { resources: { Resources } = {} },
+    } = this.serverless;
+    const eventBuses = {};
+
+    for (const key in Resources) {
+      if (
+        Object.prototype.hasOwnProperty.call(Resources, key) &&
+        Resources[key].Type === "AWS::Events::EventBus"
+      ) {
+        eventBuses[key] = Resources[key].Properties.Name;
+      }
+    }
+
+    return eventBuses;
   }
 
   invokeSubscribers(entries) {
@@ -169,7 +191,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     if (subscriber.event.eventBus && entry.EventBusName) {
       subscribedChecks.push(
-        subscriber.event.eventBus.includes(entry.EventBusName)
+        this.compareEventBusName(subscriber.event.eventBus, entry.EventBusName)
       );
     }
 
@@ -212,6 +234,34 @@ class ServerlessOfflineAwsEventbridgePlugin {
       `${subscriber.functionKey} ${subscribed ? "is" : "is not"} subscribed`
     );
     return subscribed;
+  }
+
+  compareEventBusName(eventBus, eventBusName) {
+    if (typeof eventBus === "string") {
+      return eventBus.includes(eventBusName);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(eventBus, "Fn::GetAtt")) {
+      const resourceName = eventBus["Fn::GetAtt"][0];
+
+      if (this.eventBuses[resourceName]) {
+        return (
+          this.eventBuses[resourceName] &&
+          this.eventBuses[resourceName].includes(eventBusName)
+        );
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(eventBus, "Fn::ImportValue")) {
+      const importedResourceName = eventBus["Fn::ImportValue"];
+
+      return (
+        this.importedEventBuses[importedResourceName] &&
+        this.importedEventBuses[importedResourceName].includes(eventBusName)
+      );
+    }
+
+    return false;
   }
 
   getEvents() {
