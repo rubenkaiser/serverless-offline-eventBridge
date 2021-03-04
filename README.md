@@ -126,6 +126,48 @@ The events handler with two functions (publish and consume)
   }
 ```
 
+## Using CloudFormation intrinsic functions
+
+At some point you might want to use an existing event bus. This plugin needs to somehow resolve intrinsic CloudFormation function calls to event bus names/arns.
+
+An event bus created by the same template, will be referenced using the `!GetAtt` function:
+
+```YAML
+functions:
+
+  consumeEvent:
+    handler: events.consume
+    events:
+      - eventBridge:
+          eventBus: !GetAtt EventBus.Arn
+```
+
+This plugin will look for an `EventBus` resource of type `AWS::Events::EventBus` when deciding whether a function must be triggered.
+
+Or you might use `!ImportValue` to reference an event bus created by another stack.
+
+```YAML
+functions:
+
+  consumeEvent:
+    handler: events.consume
+    events:
+      - eventBridge:
+          eventBus: !ImportValue EventBusNameFromOtherStack
+```
+
+In this case, you won't define the resource directly in your template. To overcome this limitation, you can define a custom object in `serverless.yml` that indicates the mapping between imported keys and the actual event bus name/arn:
+
+```YAML
+custom:
+  serverless-offline-aws-eventbridge:
+    port: 4010 # port to run the eventbridge mock server on
+    debug: false # flag to show debug messages
+    account: '' # account id that gets passed to the event
+    imported-event-buses:
+      EventBusNameFromOtherStack: event-bus-name-or-arn
+```
+
 ## Versions
 This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
 
