@@ -241,8 +241,13 @@ class ServerlessOfflineAwsEventbridgePlugin {
       return eventBus.includes(eventBusName);
     }
 
-    if (Object.prototype.hasOwnProperty.call(eventBus, "Fn::GetAtt")) {
-      const resourceName = eventBus["Fn::GetAtt"][0];
+    if (
+      Object.prototype.hasOwnProperty.call(eventBus, "Ref") ||
+      Object.prototype.hasOwnProperty.call(eventBus, "Fn::Ref") ||
+      Object.prototype.hasOwnProperty.call(eventBus, "Fn::GetAtt")
+    ) {
+      const resourceName =
+        eventBus.Ref || eventBus["Fn::Ref"] || eventBus["Fn::GetAtt"][0];
 
       if (this.eventBuses[resourceName]) {
         return (
