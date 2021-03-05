@@ -330,7 +330,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
   flattenObject(object, prefix = "") {
     return Object.entries(object).reduce(
       (accumulator, [key, value]) =>
-        value && value instanceof Object && !(value instanceof Date)
+        value &&
+        value instanceof Object &&
+        !(value instanceof Date) &&
+        !Array.isArray(value)
           ? {
               ...accumulator,
               ...this.flattenObject(value, (prefix && `${prefix}.`) + key),
