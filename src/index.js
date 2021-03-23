@@ -307,7 +307,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
         account: this.account,
         time: new Date().toISOString(),
         region: this.region,
-        resources: [],
+        resources: entry.Resources,
         detail: JSON.parse(entry.Detail),
       };
 
