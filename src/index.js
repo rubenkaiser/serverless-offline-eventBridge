@@ -20,7 +20,6 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.importedEventBuses = {};
     this.eventBridgeServer = null;
     this.location = null;
-    this.subscriberOnly = false;
 
     this.pubSock = null;
     this.subSock = null;
@@ -40,7 +39,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.log("start");
     this.init();
 
-    if (!this.subscriberOnly) {
+    if (this.mockEventBridgeServer) {
       this.eventBridgeServer = this.app.listen(this.port);
     }
   }
@@ -57,7 +56,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
     this.port = this.config.port || 4010;
-    this.subscriberOnly = this.config.subscriberOnly || false;
+    this.mockEventBridgeServer = this.config.mockEventBridgeServer || true;
     this.pubSubPort = this.config.pubSubPort || 4011;
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
@@ -69,7 +68,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     } = this.serverless;
 
     // If the stack receives EventBridge events, start the MQ publisher
-    if (!this.subscriberOnly) {
+    if (this.mockEventBridgeServer) {
       this.pubSock = zmq.socket("pub");
       this.pubSock.bindSync(`tcp://127.0.0.1:${this.pubSubPort}`);
     }

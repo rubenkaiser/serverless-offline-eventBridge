@@ -34,7 +34,7 @@ optional options shown with defaults
 custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventBridge mock server on
-    subscriberOnly: false # Set to true if the eventBridge mock server is managed by another stack
+    mockEventBridgeServer: true # Set to false if EventBridge is already mocked by another stack
     pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge Mock server from another stack) 
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
@@ -164,7 +164,7 @@ In this case, you won't define the resource directly in your template. To overco
 custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventBridge mock server on
-    subscriberOnly: false # Set to true if the eventBridge mock server is managed by another stack
+    mockEventBridgeServer: true # Set to false if EventBridge is already mocked by another stack
     pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge mock server from another stack)
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event

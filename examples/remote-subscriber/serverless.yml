@@ -22,7 +22,7 @@ functions:
 
 custom:
   serverless-offline-aws-eventbridge:
-    subscriberOnly: true # The eventBridge mock is managed by another stack
+    mockEventBridgeServer: false # The eventBridge mock server is managed by another stack
     pubSubPort: 4011 # port to run the eventbridge mock server on
     debug: true # flag to show debug messages
     account: '' # account id that gets passed to the event
