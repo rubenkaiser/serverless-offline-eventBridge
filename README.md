@@ -34,6 +34,8 @@ optional options shown with defaults
 custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventbridge mock server on
+    subscriberOnly: false # Set to true if the eventBridge mock is managed by another stack
+    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an MQ server from another stack) 
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     maximumRetryAttempts: 10 # maximumRetryAttempts to retry lambda
@@ -162,11 +164,38 @@ In this case, you won't define the resource directly in your template. To overco
 custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventbridge mock server on
+    subscriberOnly: false # Set to true if the eventBridge mock is managed by another stack
+    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an MQ server from another stack)
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     imported-event-buses:
       EventBusNameFromOtherStack: event-bus-name-or-arn
 ```
+
+## Examples
+
+Two stacks are provided as example:
+* `same-stack-publisher-subscriber` runs a mock of Eventbridge. It also has a local (same stack) subscriber
+* `remote-subscriber` is a completely independent microservice listening to the eventBridge mock created by the `same-stack-publisher-subscriber` stack
+
+```bash
+cd examples/same-stack-publisher-subscriber
+npm i
+serverless offline start
+```
+
+```bash
+cd examples/remote-subscriber
+npm i
+serverless offline start
+```
+
+Then hit the exposed API gateway endpoint to publish a message: http://localhost:3016/dev/publish
+
+You should see the message received on both stacks in the terminal output.
+
+Also, you will notice that the socket connection is resilient to crash: everything works as soon as both stacks are up and ready, regardless of which stack has been restarted last.
+
 
 ## Versions
 This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
