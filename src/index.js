@@ -19,7 +19,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.debug = null;
     this.importedEventBuses = {};
     this.eventBridgeServer = null;
-    this.location = null;
+    this.mockEventBridgeServer = null;
 
     this.pubSock = null;
     this.subSock = null;
