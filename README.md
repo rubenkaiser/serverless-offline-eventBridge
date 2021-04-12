@@ -33,9 +33,9 @@ optional options shown with defaults
 ```YAML
 custom:
   serverless-offline-aws-eventbridge:
-    port: 4010 # port to run the eventbridge mock server on
-    subscriberOnly: false # Set to true if the eventBridge mock is managed by another stack
-    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an MQ server from another stack) 
+    port: 4010 # port to run the eventBridge mock server on
+    subscriberOnly: false # Set to true if the eventBridge mock server is managed by another stack
+    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge Mock server from another stack) 
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     maximumRetryAttempts: 10 # maximumRetryAttempts to retry lambda
@@ -163,9 +163,9 @@ In this case, you won't define the resource directly in your template. To overco
 ```YAML
 custom:
   serverless-offline-aws-eventbridge:
-    port: 4010 # port to run the eventbridge mock server on
-    subscriberOnly: false # Set to true if the eventBridge mock is managed by another stack
-    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an MQ server from another stack)
+    port: 4010 # port to run the eventBridge mock server on
+    subscriberOnly: false # Set to true if the eventBridge mock server is managed by another stack
+    pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge mock server from another stack)
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     imported-event-buses:
@@ -178,12 +178,17 @@ Two stacks are provided as example:
 * `same-stack-publisher-subscriber` runs a mock of Eventbridge. It also has a local (same stack) subscriber
 * `remote-subscriber` is a completely independent microservice listening to the eventBridge mock created by the `same-stack-publisher-subscriber` stack
 
+1) Install project dependencies
+```bash
+npm i
+```
+2) Run the first stack in a terminal 
 ```bash
 cd examples/same-stack-publisher-subscriber
 npm i
 serverless offline start
 ```
-
+3) Run the second stack in a different terminal
 ```bash
 cd examples/remote-subscriber
 npm i
@@ -194,7 +199,7 @@ Then hit the exposed API gateway endpoint to publish a message: http://localhost
 
 You should see the message received on both stacks in the terminal output.
 
-Also, you will notice that the socket connection is resilient to crash: everything works as soon as both stacks are up and ready, regardless of which stack has been restarted last.
+Also, you will notice that the socket connection is resilient to crashes: everything works smoothly as soon as both offline stacks are up and running, regardless of which stack has been restarted last.
 
 
 ## Versions
