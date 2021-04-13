@@ -56,7 +56,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
     this.port = this.config.port || 4010;
-    this.mockEventBridgeServer = this.config.mockEventBridgeServer || true;
+    this.mockEventBridgeServer = "mockEventBridgeServer" in this.config ? this.config.mockEventBridgeServer : true;
     this.pubSubPort = this.config.pubSubPort || 4011;
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
