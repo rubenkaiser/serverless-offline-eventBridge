@@ -23,8 +23,9 @@ functions:
 custom:
   serverless-offline-aws-eventbridge:
     mockEventBridgeServer: false # The eventBridge mock server is managed by another stack
-    pubSubPort: 4011 # port to run the eventbridge mock server on
+    pubSubPort: 4011 # port to run the MQ publisher/subscribers
     debug: true # flag to show debug messages
     account: '' # account id that gets passed to the event
   serverless-offline:
-    lambdaPort: 3018 # Do not use 3002 to avoid port conflict while multiple stacks are running
+    lambdaPort: 3018 # Use a different port avoid conflicts while multiple stacks are running
+    httpPort: 3019 # Use a different port avoid conflicts while multiple stacks are running

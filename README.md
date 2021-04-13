@@ -191,7 +191,7 @@ npm i
 serverless offline start
 ```
 
-3) Publishing a test message 
+3) Publish a test message 
    
 Simply hit the exposed API gateway endpoint: http://localhost:3016/dev/publish
 

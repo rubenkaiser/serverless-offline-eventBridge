@@ -30,15 +30,7 @@ exports.publish = async () => {
 };
 
 exports.consume = async (event, context) => {
-  console.log(`Eventbridge event received:`, event);
-  /*
-      {
-        EventBusName: 'marketing',
-        Source: 'acme.newsletter.campaign',
-        DetailType: 'UserSignUp',
-        Detail: `{ "E-Mail": "some@someemail.some" }`,
-      }
-    */
+  console.log(`Local Eventbridge event received:`, event);
   return { statusCode: 200, body: JSON.stringify(event) };
 };
 
