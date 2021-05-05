@@ -125,6 +125,34 @@ The events handler with two functions (publish and consume)
     return { statusCode: 200, body: 'scheduled event' };
   }
 ```
+## Support of EventBridge patterns
+
+EventBridge natively allows a few content-based filters defined here:
+https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns-content-based-filtering.html
+
+This plugin supports the most common patterns:
+* `prefix`
+* `anything-but`
+* `exists`
+
+```yaml
+functions:
+  consumeEvent:
+    handler: events.consume
+    events:
+      - eventBridge:
+          eventBus: marketing
+          pattern:
+            source:
+              - user
+            detail-type:
+              - { "anything-but": "deleted" }
+            detail:
+              firstname: [ { "prefix": "John" } ]
+              age: [ { "exists": true } ]
+```
+
+The `cidr` and `numeric` filters are yet to be implemented.
 
 ## Using CloudFormation intrinsic functions
 
