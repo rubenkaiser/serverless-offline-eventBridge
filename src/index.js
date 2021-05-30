@@ -133,9 +133,24 @@ class ServerlessOfflineAwsEventbridgePlugin {
       if (this.pubSock) {
         this.pubSock.send(["eventBridge", JSON.stringify(req.body.Entries)]);
       }
-
+      res.json(this.generateEventBridgeResponse(req.body.Entries));
       await res.status(200).send();
     });
+  }
+
+  /**
+   * Returns an EventBridge response as defined in the official documentation:
+   * https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html
+   */
+  generateEventBridgeResponse(entries) {
+    return {
+      Entries: entries.map(() => {
+        return {
+          EventId: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+        };
+      }),
+      FailedEntryCount: 0,
+    };
   }
 
   extractCustomBuses() {
@@ -183,25 +198,18 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.log(
         `${functionKey} successfully processed event with id ${event.id}`
       );
-      return {
-        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-      };
     } catch (err) {
       if (retry < maxRetries) {
         this.log(
-          `error: ${err} occured in ${functionKey} on ${retry}/${maxRetries}, will retry`
+          `error: ${err} occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
         );
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-        return this.invokeSubscriber(functionKey, entry, retry + 1);
+        await this.invokeSubscriber(functionKey, entry, retry + 1);
       }
       this.log(
-        `error: ${err} occured in ${functionKey} on attempt ${retry}, max attempts reached`
+        `error: ${err} occurred in ${functionKey} on attempt ${retry}, max attempts reached`
       );
-      return {
-        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-        ErrorCode: "code",
-        ErrorMessage: "message",
-      };
+      throw err;
     }
   }
 
