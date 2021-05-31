@@ -3,7 +3,9 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const zmq = require("zeromq");
+const aedes = require("aedes")();
+const mqServer = require("net").createServer(aedes.handle);
+const mqtt = require("mqtt");
 // eslint-disable-next-line import/no-unresolved
 const Lambda = require("serverless-offline/dist/lambda").default;
 
@@ -21,8 +23,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.eventBridgeServer = null;
     this.mockEventBridgeServer = null;
 
-    this.pubSock = null;
-    this.subSock = null;
+    this.mqClient = null;
 
     this.eventBuses = {};
     this.subscribers = [];
@@ -40,6 +41,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.init();
 
     if (this.mockEventBridgeServer) {
+      // Start Express Server
       this.eventBridgeServer = this.app.listen(this.port);
     }
   }
@@ -56,7 +58,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
     this.port = this.config.port || 4010;
-    this.mockEventBridgeServer = "mockEventBridgeServer" in this.config ? this.config.mockEventBridgeServer : true;
+    this.mockEventBridgeServer =
+      "mockEventBridgeServer" in this.config
+        ? this.config.mockEventBridgeServer
+        : true;
     this.pubSubPort = this.config.pubSubPort || 4011;
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
@@ -67,23 +72,31 @@ class ServerlessOfflineAwsEventbridgePlugin {
       service: { custom = {}, provider },
     } = this.serverless;
 
-    // If the stack receives EventBridge events, start the MQ publisher
+    // If the stack receives EventBridge events, start the MQ broker as well
     if (this.mockEventBridgeServer) {
-      this.pubSock = zmq.socket("pub");
-      this.pubSock.bindSync(`tcp://127.0.0.1:${this.pubSubPort}`);
+      mqServer.listen(this.pubSubPort, () => {
+        this.log(
+          `MQTT Broker started and listening on port ${this.pubSubPort}`
+        );
+      });
     }
 
     // Connect to the MQ server for any lambdas listening to EventBridge events
-    this.subSock = zmq.socket("sub");
-    this.subSock.connect(`tcp://127.0.0.1:${this.pubSubPort}`);
-    this.subSock.subscribe("eventBridge");
+    this.mqClient = mqtt.connect(`mqtt://127.0.0.1:${this.pubSubPort}`);
 
-    this.subSock.on("message", async (topic, message) => {
-      const entries = JSON.parse(message.toString());
-      const invokedLambdas = this.invokeSubscribers(entries);
-      if (invokedLambdas.length) {
-        await Promise.all(invokedLambdas);
-      }
+    this.mqClient.on("connect", () => {
+      this.mqClient.subscribe("eventBridge", () => {
+        this.log(
+          `MQTT broker connected and listening on port ${this.pubSubPort}`
+        );
+        this.mqClient.on("message", async (topic, message) => {
+          const entries = JSON.parse(message.toString());
+          const invokedLambdas = this.invokeSubscribers(entries);
+          if (invokedLambdas.length) {
+            await Promise.all(invokedLambdas);
+          }
+        });
+      });
     });
 
     const offlineOptions = custom["serverless-offline"];
@@ -130,8 +143,8 @@ class ServerlessOfflineAwsEventbridgePlugin {
     });
 
     this.app.all("*", async (req, res) => {
-      if (this.pubSock) {
-        this.pubSock.send(["eventBridge", JSON.stringify(req.body.Entries)]);
+      if (this.mqClient) {
+        this.mqClient.publish("eventBridge", JSON.stringify(req.body.Entries));
       }
       res.json(this.generateEventBridgeResponse(req.body.Entries));
       await res.status(200).send();
