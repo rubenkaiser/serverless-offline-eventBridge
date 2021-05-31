@@ -6,7 +6,6 @@ const bodyParser = require("body-parser");
 const aedes = require("aedes")();
 const mqServer = require("net").createServer(aedes.handle);
 const mqtt = require("mqtt");
-// eslint-disable-next-line import/no-unresolved
 const Lambda = require("serverless-offline/dist/lambda").default;
 
 class ServerlessOfflineAwsEventbridgePlugin {
