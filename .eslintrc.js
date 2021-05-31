@@ -37,5 +37,7 @@ module.exports = {
     "lines-between-class-members": "off",
     "no-console": "off",
     "no-restricted-syntax": "off",
+
+    "import/no-extraneous-dependencies": ["error", { devDependencies: true }],
   },
 };

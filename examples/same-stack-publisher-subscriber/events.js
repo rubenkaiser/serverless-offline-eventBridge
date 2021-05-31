@@ -28,8 +28,7 @@ exports.publish = async () => {
   }
 };
 
-exports.consume = async (event, context) => {
+exports.consume = async (event) => {
   console.log(`Local Eventbridge event received:`, event);
   return { statusCode: 200, body: JSON.stringify(event) };
 };
-
