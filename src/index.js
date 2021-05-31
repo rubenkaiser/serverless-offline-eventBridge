@@ -3,7 +3,9 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-// eslint-disable-next-line import/no-unresolved
+const aedes = require("aedes")();
+const mqServer = require("net").createServer(aedes.handle);
+const mqtt = require("mqtt");
 const Lambda = require("serverless-offline/dist/lambda").default;
 
 class ServerlessOfflineAwsEventbridgePlugin {
@@ -13,11 +15,14 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.options = options;
     this.config = null;
     this.port = null;
+    this.pubSubPort = null;
     this.account = null;
     this.debug = null;
     this.importedEventBuses = {};
     this.eventBridgeServer = null;
-    this.location = null;
+    this.mockEventBridgeServer = null;
+
+    this.mqClient = null;
 
     this.eventBuses = {};
     this.subscribers = [];
@@ -33,7 +38,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
   async start() {
     this.log("start");
     this.init();
-    this.eventBridgeServer = this.app.listen(this.port);
+
+    if (this.mockEventBridgeServer) {
+      // Start Express Server
+      this.eventBridgeServer = this.app.listen(this.port);
+    }
   }
 
   async stop() {
@@ -48,6 +57,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
     this.port = this.config.port || 4010;
+    this.mockEventBridgeServer =
+      "mockEventBridgeServer" in this.config
+        ? this.config.mockEventBridgeServer
+        : true;
+    this.pubSubPort = this.config.pubSubPort || 4011;
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
     this.debug = this.config.debug || false;
@@ -56,6 +70,33 @@ class ServerlessOfflineAwsEventbridgePlugin {
     const {
       service: { custom = {}, provider },
     } = this.serverless;
+
+    // If the stack receives EventBridge events, start the MQ broker as well
+    if (this.mockEventBridgeServer) {
+      mqServer.listen(this.pubSubPort, () => {
+        this.log(
+          `MQTT Broker started and listening on port ${this.pubSubPort}`
+        );
+      });
+    }
+
+    // Connect to the MQ server for any lambdas listening to EventBridge events
+    this.mqClient = mqtt.connect(`mqtt://127.0.0.1:${this.pubSubPort}`);
+
+    this.mqClient.on("connect", () => {
+      this.mqClient.subscribe("eventBridge", () => {
+        this.log(
+          `MQTT broker connected and listening on port ${this.pubSubPort}`
+        );
+        this.mqClient.on("message", async (topic, message) => {
+          const entries = JSON.parse(message.toString());
+          const invokedLambdas = this.invokeSubscribers(entries);
+          if (invokedLambdas.length) {
+            await Promise.all(invokedLambdas);
+          }
+        });
+      });
+    });
 
     const offlineOptions = custom["serverless-offline"];
     const offlineEventBridgeOptions =
@@ -101,17 +142,27 @@ class ServerlessOfflineAwsEventbridgePlugin {
     });
 
     this.app.all("*", async (req, res) => {
-      const invokedLambdas = this.invokeSubscribers(req.body.Entries);
-      if (invokedLambdas.length) {
-        const eventResults = await Promise.all(invokedLambdas);
-        res.json({
-          Entries: eventResults,
-          FailedEntryCount: eventResults.filter((e) => e.ErrorCode).length,
-        });
-      } else {
-        res.status(200).send();
+      if (this.mqClient) {
+        this.mqClient.publish("eventBridge", JSON.stringify(req.body.Entries));
       }
+      res.json(this.generateEventBridgeResponse(req.body.Entries));
+      await res.status(200).send();
     });
+  }
+
+  /**
+   * Returns an EventBridge response as defined in the official documentation:
+   * https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html
+   */
+  generateEventBridgeResponse(entries) {
+    return {
+      Entries: entries.map(() => {
+        return {
+          EventId: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
+        };
+      }),
+      FailedEntryCount: 0,
+    };
   }
 
   extractCustomBuses() {
@@ -159,25 +210,18 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.log(
         `${functionKey} successfully processed event with id ${event.id}`
       );
-      return {
-        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-      };
     } catch (err) {
       if (retry < maxRetries) {
         this.log(
-          `error: ${err} occured in ${functionKey} on ${retry}/${maxRetries}, will retry`
+          `error: ${err} occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
         );
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-        return this.invokeSubscriber(functionKey, entry, retry + 1);
+        await this.invokeSubscriber(functionKey, entry, retry + 1);
       }
       this.log(
-        `error: ${err} occured in ${functionKey} on attempt ${retry}, max attempts reached`
+        `error: ${err} occurred in ${functionKey} on attempt ${retry}, max attempts reached`
       );
-      return {
-        eventId: event.id || `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
-        ErrorCode: "code",
-        ErrorMessage: "message",
-      };
+      throw err;
     }
   }
 

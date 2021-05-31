@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "serverless-offline": "^6.8.0",
+    "serverless-offline-aws-eventbridge": "github:damien-thiesson/serverless-offline-eventBridge#mq-proxy"
+  }
+}

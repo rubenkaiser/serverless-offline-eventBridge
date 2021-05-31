@@ -1,0 +1,31 @@
+service: elasticsearch-sync
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: us-east-1
+
+plugins:
+  - serverless-offline
+  - serverless-offline-aws-eventbridge
+
+functions:
+  consumeEvent:
+    handler: events.consume
+    events:
+      - eventBridge:
+          eventBus: marketing
+          pattern:
+            source:
+              - acme.newsletter.campaign
+
+custom:
+  serverless-offline-aws-eventbridge:
+    mockEventBridgeServer: false # The eventBridge mock server is created by another stack
+    pubSubPort: 4011 # port to run the MQ publisher/subscribers
+    debug: true # flag to show debug messages
+    account: '' # account id that gets passed to the event
+  serverless-offline:
+    lambdaPort: 3018 # Use a different port avoid conflicts while multiple stacks are running
+    httpPort: 3019 # Use a different port avoid conflicts while multiple stacks are running
