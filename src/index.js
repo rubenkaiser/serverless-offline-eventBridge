@@ -2,7 +2,6 @@
 
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const aedes = require("aedes");
 const net = require("net");
 const mqtt = require("mqtt");
@@ -128,8 +127,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
     // initialise the express app
     this.app = express();
     this.app.use(cors());
-    this.app.use(bodyParser.json({ type: "application/x-amz-json-1.1", limit: "10mb" }));
-    this.app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
+    this.app.use(
+      express.json({ type: "application/x-amz-json-1.1", limit: "10mb" })
+    );
+    this.app.use(express.urlencoded({ extended: true, limit: "10mb" }));
     this.app.use((req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
       res.header(
@@ -148,7 +149,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
         this.mqClient.publish("eventBridge", JSON.stringify(req.body.Entries));
       }
       res.json(this.generateEventBridgeResponse(req.body.Entries));
-      await res.status(200).send();
+      res.status(200).send();
     });
   }
 
