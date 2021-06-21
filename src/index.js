@@ -3,8 +3,8 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const aedes = require("aedes")();
-const mqServer = require("net").createServer(aedes.handle);
+const aedes = require("aedes");
+const net = require("net");
 const mqtt = require("mqtt");
 const Lambda = require("serverless-offline/dist/lambda").default;
 
@@ -22,6 +22,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.eventBridgeServer = null;
     this.mockEventBridgeServer = null;
 
+    this.mqServer = null;
     this.mqClient = null;
 
     this.eventBuses = {};
@@ -73,7 +74,8 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     // If the stack receives EventBridge events, start the MQ broker as well
     if (this.mockEventBridgeServer) {
-      mqServer.listen(this.pubSubPort, () => {
+      this.mqServer = net.createServer(aedes().handle);
+      this.mqServer.listen(this.pubSubPort, () => {
         this.log(
           `MQTT Broker started and listening on port ${this.pubSubPort}`
         );
