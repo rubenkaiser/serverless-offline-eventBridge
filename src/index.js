@@ -128,7 +128,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     // initialise the express app
     this.app = express();
     this.app.use(cors());
-    this.app.use(bodyParser.json({ type: "application/x-amz-json-1.1" }));
+    this.app.use(bodyParser.json({ type: "application/x-amz-json-1.1", limit: "10mb" }));
     this.app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
     this.app.use((req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
