@@ -20,6 +20,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.importedEventBuses = {};
     this.eventBridgeServer = null;
     this.mockEventBridgeServer = null;
+    this.payloadSizeLimit = null;
 
     this.mqServer = null;
     this.mqClient = null;
@@ -66,6 +67,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.region = this.serverless.service.provider.region || "us-east-1";
     this.debug = this.config.debug || false;
     this.importedEventBuses = this.config["imported-event-buses"] || {};
+    this.payloadSizeLimit = this.config.payloadSizeLimit || "10mb";
 
     const {
       service: { custom = {}, provider },
@@ -128,9 +130,14 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.app = express();
     this.app.use(cors());
     this.app.use(
-      express.json({ type: "application/x-amz-json-1.1", limit: "10mb" })
+      express.json({
+        type: "application/x-amz-json-1.1",
+        limit: this.payloadSizeLimit,
+      })
     );
-    this.app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+    this.app.use(
+      express.urlencoded({ extended: true, limit: this.payloadSizeLimit })
+    );
     this.app.use((req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
       res.header(
