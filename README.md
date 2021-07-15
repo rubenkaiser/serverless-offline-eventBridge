@@ -35,6 +35,7 @@ custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventBridge mock server on
     mockEventBridgeServer: true # Set to false if EventBridge is already mocked by another stack
+    hostname: 127.0.0.1 # IP or hostname of existing EventBridge if mocked by another stack
     pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge Mock server from another stack)
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
@@ -194,12 +195,15 @@ custom:
   serverless-offline-aws-eventbridge:
     port: 4010 # port to run the eventBridge mock server on
     mockEventBridgeServer: true # Set to false if EventBridge is already mocked by another stack
+    hostname: 127.0.0.1 # IP or hostname of existing EventBridge if mocked by another stack
     pubSubPort: 4011 # Port to run the MQ server (or just listen if using an EventBridge mock server from another stack)
     debug: false # flag to show debug messages
     account: '' # account id that gets passed to the event
     imported-event-buses:
       EventBusNameFromOtherStack: event-bus-name-or-arn
 ```
+
+If your existing EventBridge is mocked on a different host/IP (e.g. When stacks are hosted in Docker containers), then you will also need to specify a `hostname`. If using Docker, you should use the name of the container that mocks the EventBridge (assuming both containers are on the same Docker network).
 
 ## Examples
 
