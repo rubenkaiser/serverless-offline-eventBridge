@@ -14,6 +14,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.options = options;
     this.config = null;
     this.port = null;
+    this.hostname = null;
     this.pubSubPort = null;
     this.account = null;
     this.debug = null;
@@ -62,6 +63,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       "mockEventBridgeServer" in this.config
         ? this.config.mockEventBridgeServer
         : true;
+    this.hostname = this.config.hostname || "127.0.0.1";
     this.pubSubPort = this.config.pubSubPort || 4011;
     this.account = this.config.account || "";
     this.region = this.serverless.service.provider.region || "us-east-1";
@@ -84,12 +86,12 @@ class ServerlessOfflineAwsEventbridgePlugin {
     }
 
     // Connect to the MQ server for any lambdas listening to EventBridge events
-    this.mqClient = mqtt.connect(`mqtt://127.0.0.1:${this.pubSubPort}`);
+    this.mqClient = mqtt.connect(`mqtt://${this.hostname}:${this.pubSubPort}`);
 
     this.mqClient.on("connect", () => {
       this.mqClient.subscribe("eventBridge", () => {
         this.log(
-          `MQTT broker connected and listening on port ${this.pubSubPort}`
+          `MQTT broker connected and listening on mqtt://${this.hostname}:${this.pubSubPort}`
         );
         this.mqClient.on("message", async (topic, message) => {
           const entries = JSON.parse(message.toString());
@@ -363,7 +365,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     // "numeric", and "cidr" filters and the recurring logic are yet supported by this plugin.
     throw new Error(
       `The ${filterType} eventBridge filter is not supported in serverless-offline-aws-eventBridge yet. ` +
-        `Please consider submitting a PR to support it.`
+      `Please consider submitting a PR to support it.`
     );
   }
 
@@ -462,13 +464,13 @@ class ServerlessOfflineAwsEventbridgePlugin {
     return Object.entries(object).reduce(
       (accumulator, [key, value]) =>
         value &&
-        value instanceof Object &&
-        !(value instanceof Date) &&
-        !Array.isArray(value)
+          value instanceof Object &&
+          !(value instanceof Date) &&
+          !Array.isArray(value)
           ? {
-              ...accumulator,
-              ...this.flattenObject(value, (prefix && `${prefix}.`) + key),
-            }
+            ...accumulator,
+            ...this.flattenObject(value, (prefix && `${prefix}.`) + key),
+          }
           : { ...accumulator, [(prefix && `${prefix}.`) + key]: value },
       {}
     );
