@@ -25,7 +25,7 @@
     "mqtt": "^4.2.6"
   },
   "peerDependencies": {
-    "serverless-offline": ">6"
+    "serverless-offline": ">5"
   },
   "repository": {
     "type": "git",
