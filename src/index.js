@@ -89,7 +89,11 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.mqClient = mqtt.connect(`mqtt://${this.hostname}:${this.pubSubPort}`);
 
     this.mqClient.on("connect", () => {
-      this.mqClient.subscribe("eventBridge", () => {
+      this.mqClient.subscribe("eventBridge", (err, granted) => {
+        // if the client is already subscribed, granted will be an empty array.
+        // This prevents duplicate message processing when the client reconnects
+        if (!granted || granted.length === 0) return;
+
         this.log(
           `MQTT broker connected and listening on mqtt://${this.hostname}:${this.pubSubPort}`
         );
