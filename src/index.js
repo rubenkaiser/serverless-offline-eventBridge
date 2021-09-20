@@ -89,7 +89,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.mqClient = mqtt.connect(`mqtt://${this.hostname}:${this.pubSubPort}`);
 
     this.mqClient.on("connect", () => {
-      this.mqClient.subscribe("eventBridge", (err, granted) => {
+      this.mqClient.subscribe("eventBridge", (_err, granted) => {
         // if the client is already subscribed, granted will be an empty array.
         // This prevents duplicate message processing when the client reconnects
         if (!granted || granted.length === 0) return;
@@ -97,7 +97,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
         this.log(
           `MQTT broker connected and listening on mqtt://${this.hostname}:${this.pubSubPort}`
         );
-        this.mqClient.on("message", async (topic, message) => {
+        this.mqClient.on("message", async (_topic, message) => {
           const entries = JSON.parse(message.toString());
           const invokedLambdas = this.invokeSubscribers(entries);
           if (invokedLambdas.length) {
@@ -144,7 +144,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.app.use(
       express.urlencoded({ extended: true, limit: this.payloadSizeLimit })
     );
-    this.app.use((req, res, next) => {
+    this.app.use((_req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
       res.header(
         "Access-Control-Allow-Headers",
