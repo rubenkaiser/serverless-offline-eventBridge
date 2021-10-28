@@ -462,8 +462,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
                 subscribers.push({
                   event: {
                     ...event.eventBridge,
-                    eventBus: [...(event.eventBus || []), eventBusName],
+                    eventBus: eventBusName,
                   },
+                  functionKey,
                 });
               } else {
                 // e.g. cron expressions
