@@ -28,6 +28,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     this.eventBuses = {};
     this.subscribers = [];
+    this.scheduleIntervals = [];
     this.app = null;
 
     this.hooks = {
@@ -52,6 +53,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.log("stop");
     this.eventBridgeServer.close();
     if (this.lambda) await this.lambda.cleanup();
+    this.scheduleIntervals.forEach(i => clearInterval(i))
   }
 
   init() {
@@ -126,11 +128,12 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.options.retryDelayMs = 500;
     }
 
-    const { subscribers, lambdas } = this.getEvents();
+    const { subscribers, lambdas, scheduleIntervals } = this.getEvents();
 
     this.eventBuses = this.extractCustomBuses();
     this.createLambda(lambdas);
     this.subscribers = subscribers;
+    this.scheduleIntervals = scheduleIntervals;
 
     // initialise the express app
     this.app = express();
@@ -411,6 +414,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     const functionKeys = service.getAllFunctions();
     const subscribers = [];
     const lambdas = [];
+    const scheduleIntervals = [];
 
     for (const functionKey of functionKeys) {
       const functionDefinition = service.getFunction(functionKey);
@@ -419,11 +423,52 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
       if (functionDefinition.events) {
         for (const event of functionDefinition.events) {
-          if (event.eventBridge && !event.eventBridge.schedule) {
-            subscribers.push({
-              event: event.eventBridge,
-              functionKey,
-            });
+          if (event.eventBridge) {
+            if (event.eventBridge.schedule !== undefined) {
+              if (event.eventBridge.schedule.match(/^rate\(((1 (minute|hour|day))|([2-9][1-9]* (minutes|hours|days)))\)$/)) {
+                const rate = event.eventBridge.schedule.slice(5, -1)
+                const [periodInUnits, unit] = rate.split(" ");
+
+                const unitToMilliseconds = {
+                  minute: 60000,
+                  minutes: 60000,
+                  hour: 3600000,
+                  hours: 3600000,
+                  day: 86400000,
+                  days: 86400000,
+                }
+
+                const eventBusName = "arn:aws:events:serverless-offline-aws-eventBridge:event-bus/schedule." + functionKey
+
+                const periodInMilliseconds = periodInUnits * unitToMilliseconds[unit]
+                scheduleIntervals.push(setInterval(async () => {
+                  const invokedLambdas = this.invokeSubscribers([{
+                    EventBusName: eventBusName,
+                  }]);
+                  if (invokedLambdas.length) {
+                    await Promise.all(invokedLambdas);
+                  }
+                }, periodInMilliseconds))
+
+                subscribers.push({
+                  event: {
+                    ...event.eventBridge,
+                    eventBus: [...(event.eventBus || []), eventBusName],
+                  }
+                })
+              } else {
+                // e.g. cron expressions
+                throw new Error(
+                  `The schedule "${event.eventBridge.schedule}" is not supported in serverless-offline-aws-eventBridge yet. ` +
+                    `Please consider submitting a PR to support it.`
+                );
+              }
+            } else {
+              subscribers.push({
+                event: event.eventBridge,
+                functionKey,
+              });
+            }
           }
         }
       }
@@ -432,6 +477,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     return {
       subscribers,
       lambdas,
+      scheduleIntervals,
     };
   }
 
