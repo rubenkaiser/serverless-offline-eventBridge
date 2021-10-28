@@ -53,7 +53,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     this.log("stop");
     this.eventBridgeServer.close();
     if (this.lambda) await this.lambda.cleanup();
-    this.scheduleIntervals.forEach(i => clearInterval(i))
+    this.scheduleIntervals.forEach((i) => clearInterval(i));
   }
 
   init() {
@@ -425,8 +425,12 @@ class ServerlessOfflineAwsEventbridgePlugin {
         for (const event of functionDefinition.events) {
           if (event.eventBridge) {
             if (event.eventBridge.schedule !== undefined) {
-              if (event.eventBridge.schedule.match(/^rate\(((1 (minute|hour|day))|([2-9][1-9]* (minutes|hours|days)))\)$/)) {
-                const rate = event.eventBridge.schedule.slice(5, -1)
+              if (
+                event.eventBridge.schedule.match(
+                  /^rate\(((1 (minute|hour|day))|([2-9][1-9]* (minutes|hours|days)))\)$/
+                )
+              ) {
+                const rate = event.eventBridge.schedule.slice(5, -1);
                 const [periodInUnits, unit] = rate.split(" ");
 
                 const unitToMilliseconds = {
@@ -436,26 +440,31 @@ class ServerlessOfflineAwsEventbridgePlugin {
                   hours: 3600000,
                   day: 86400000,
                   days: 86400000,
-                }
+                };
 
-                const eventBusName = "arn:aws:events:serverless-offline-aws-eventBridge:event-bus/schedule." + functionKey
+                const eventBusName = `arn:aws:events:serverless-offline-aws-eventBridge:event-bus/schedule.${functionKey}`;
 
-                const periodInMilliseconds = periodInUnits * unitToMilliseconds[unit]
-                scheduleIntervals.push(setInterval(async () => {
-                  const invokedLambdas = this.invokeSubscribers([{
-                    EventBusName: eventBusName,
-                  }]);
-                  if (invokedLambdas.length) {
-                    await Promise.all(invokedLambdas);
-                  }
-                }, periodInMilliseconds))
+                const periodInMilliseconds =
+                  periodInUnits * unitToMilliseconds[unit];
+                scheduleIntervals.push(
+                  setInterval(async () => {
+                    const invokedLambdas = this.invokeSubscribers([
+                      {
+                        EventBusName: eventBusName,
+                      },
+                    ]);
+                    if (invokedLambdas.length) {
+                      await Promise.all(invokedLambdas);
+                    }
+                  }, periodInMilliseconds)
+                );
 
                 subscribers.push({
                   event: {
                     ...event.eventBridge,
                     eventBus: [...(event.eventBus || []), eventBusName],
-                  }
-                })
+                  },
+                });
               } else {
                 // e.g. cron expressions
                 throw new Error(
