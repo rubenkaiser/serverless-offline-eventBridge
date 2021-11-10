@@ -1,6 +1,6 @@
 {
   "name": "serverless-offline-aws-eventbridge",
-  "version": "1.6.4",
+  "version": "1.6.5-beta.0",
   "description": "Serverless plugin to run eventbridge offline.",
   "main": "src/index.js",
   "author": "Ruben Kaiser",
@@ -22,7 +22,8 @@
     "aedes": "^0.46.0",
     "cors": "^2.8.5",
     "express": "^4.17.1",
-    "mqtt": "^4.2.6"
+    "mqtt": "^4.2.6",
+    "node-cron": "^3.0.0"
   },
   "peerDependencies": {
     "serverless-offline": ">5"

@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const cron = require("node-cron");
 const cors = require("cors");
 const aedes = require("aedes");
 const net = require("net");
@@ -28,6 +29,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     this.eventBuses = {};
     this.subscribers = [];
+    this.scheduledEvents = [];
     this.app = null;
 
     this.hooks = {
@@ -126,9 +128,25 @@ class ServerlessOfflineAwsEventbridgePlugin {
       this.options.retryDelayMs = 500;
     }
 
-    const { subscribers, lambdas } = this.getEvents();
+    const { subscribers, lambdas, scheduledEvents } = this.getEvents();
 
     this.eventBuses = this.extractCustomBuses();
+
+    this.scheduledEvents = scheduledEvents;
+    // loop the scheduled events and create a cron for them
+    this.scheduledEvents.forEach((scheduledEvent) => {
+      cron.schedule(scheduledEvent.schedule, async () => {
+        if (this.debug) {
+          this.log(`run scheduled function ${scheduledEvent.functionKey}`);
+        }
+        this.invokeSubscriber(scheduledEvent.functionKey, {
+          Source: `Scheduled function ${scheduledEvent.functionKey}`,
+          Resources: [],
+          Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
+        });
+      });
+    });
+
     this.createLambda(lambdas);
     this.subscribers = subscribers;
 
@@ -410,6 +428,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     const { service } = this.serverless;
     const functionKeys = service.getAllFunctions();
     const subscribers = [];
+    const scheduledEvents = [];
     const lambdas = [];
 
     for (const functionKey of functionKeys) {
@@ -419,11 +438,63 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
       if (functionDefinition.events) {
         for (const event of functionDefinition.events) {
-          if (event.eventBridge && !event.eventBridge.schedule) {
-            subscribers.push({
-              event: event.eventBridge,
-              functionKey,
-            });
+          if (event.eventBridge) {
+            if (!event.eventBridge.schedule) {
+              subscribers.push({
+                event: event.eventBridge,
+                functionKey,
+              });
+            } else {
+              let convertedSchedule;
+
+              if (event.eventBridge.schedule.indexOf("rate") > -1) {
+                const rate = event.eventBridge.schedule
+                  .replace("rate(", "")
+                  .replace(")", "");
+
+                const parts = rate.split(" ");
+
+                if (parts[1]) {
+                  if (parts[1].startsWith("minute")) {
+                    convertedSchedule = `*/${parts[0]} * * * *`;
+                  } else if (parts[1].startsWith("hour")) {
+                    convertedSchedule = `0 */${parts[0]} * * *`;
+                  } else if (parts[1].startsWith("day")) {
+                    convertedSchedule = `0 0 */${parts[0]} * *`;
+                  } else {
+                    this.log(
+                      `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
+                    );
+                  }
+                }
+              } else {
+                // get the cron job syntax right: cron(0 5 * * ? *)
+                //
+                //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
+                // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
+                // seconds is optional so we don't use it with node-cron
+                convertedSchedule = `${event.eventBridge.schedule.substring(
+                  5,
+                  event.eventBridge.schedule.length - 3
+                )}`;
+                // replace ? by * for node-cron
+                convertedSchedule = convertedSchedule.split("?").join("*");
+              }
+              if (convertedSchedule) {
+                scheduledEvents.push({
+                  schedule: convertedSchedule,
+                  event: event.eventBridge,
+                  functionKey,
+                });
+                this.log(
+                  `Scheduled '${functionKey}' with syntax ${convertedSchedule}`
+                );
+              } else {
+                this.log(
+                  `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
+                );
+              }
+            }
           }
         }
       }
@@ -431,6 +502,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     return {
       subscribers,
+      scheduledEvents,
       lambdas,
     };
   }
