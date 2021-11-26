@@ -251,6 +251,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
         );
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
         await this.invokeSubscriber(functionKey, entry, retry + 1);
+        return;
       }
       this.log(
         `error: ${err} occurred in ${functionKey} on attempt ${retry}, max attempts reached`
