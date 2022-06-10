@@ -247,14 +247,14 @@ class ServerlessOfflineAwsEventbridgePlugin {
     } catch (err) {
       if (retry < maxRetries) {
         this.log(
-          `error: ${err} occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
+          `error: ${err.message || err} occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
         );
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
         await this.invokeSubscriber(functionKey, entry, retry + 1);
         return;
       }
       this.log(
-        `error: ${err} occurred in ${functionKey} on attempt ${retry}, max attempts reached`
+        `error: ${err.message || err} occurred in ${functionKey} on attempt ${retry}, max attempts reached`
       );
       throw err;
     }
