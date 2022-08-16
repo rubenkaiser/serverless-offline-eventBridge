@@ -235,4 +235,4 @@ You should see the message received on both stacks in the terminal output. You w
 This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
 
 ## Thanks
-This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans, @JamesKyburz, @plumsirawit and @damien-thiesson for their work and PR's.
+This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans, @JamesKyburz, @plumsirawit, @damien-thiesson and @carrickkv2 for their work and PR's.
