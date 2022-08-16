@@ -11,6 +11,10 @@ module.exports = {
     jest: true,
   },
 
+  parserOptions: {
+    ecmaVersion: 11,
+  },
+
   globals: {
     RUN_TEST_AGAINST_AWS: true,
     TEST_BASE_URL: true,

@@ -1,12 +1,13 @@
 "use strict";
 
+const fs = require("fs");
 const express = require("express");
 const cron = require("node-cron");
 const cors = require("cors");
 const aedes = require("aedes");
 const net = require("net");
 const mqtt = require("mqtt");
-const Lambda = require("serverless-offline/dist/lambda").default;
+// const Lambda = require("serverless-offline/dist/lambda").default;
 
 class ServerlessOfflineAwsEventbridgePlugin {
   constructor(serverless, options) {
@@ -41,7 +42,27 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
   async start() {
     this.log("start");
-    this.init();
+
+    /*
+     * UGLY HACK FOR NOW
+     * remove exports from serverless-offline package
+     */
+    try {
+      const data = await fs.promises.readFile(
+        "./node_modules/serverless-offline/package.json"
+      );
+      const parsedData = JSON.parse(data);
+      delete parsedData.exports;
+      await fs.promises.writeFile(
+        "./node_modules/serverless-offline/package.json",
+        JSON.stringify(parsedData)
+      );
+      this.log("Exports removed from packagejson of serverless-offline");
+    } catch (e) {
+      this.log("error", e);
+    }
+
+    await this.init();
 
     if (this.mockEventBridgeServer) {
       // Start Express Server
@@ -56,7 +77,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
     if (this.lambda) await this.lambda.cleanup();
   }
 
-  init() {
+  async init() {
     this.config =
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
@@ -147,7 +168,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
       });
     });
 
-    this.createLambda(lambdas);
+    await this.createLambda(lambdas);
     this.subscribers = subscribers;
 
     // initialise the express app
@@ -264,7 +285,10 @@ class ServerlessOfflineAwsEventbridgePlugin {
     }
   }
 
-  createLambda(lambdas) {
+  async createLambda(lambdas) {
+    const { default: Lambda } = await import(
+      "serverless-offline/src/lambda/index.js"
+    );
     this.lambda = new Lambda(this.serverless, this.options);
     this.lambda.create(lambdas);
   }
