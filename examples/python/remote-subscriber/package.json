@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "serverless-offline": "^8.8.1",
+    "serverless-offline-aws-eventbridge": "^1.6.7"
+  }
+}

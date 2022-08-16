@@ -1,0 +1,30 @@
+service: elasticsearch-sync
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+
+plugins:
+  - serverless-offline
+  - serverless-offline-aws-eventbridge
+
+functions:
+  publishEvent:
+    handler: events.publish_event
+    events:
+      - http:
+          path: publish
+          method: get
+
+
+custom:
+  serverless-offline-aws-eventbridge:
+    port: 4080 # port to run the eventbridge mock server on
+    mockEventBridgeServer: true # Set to false if the eventBridge mock is created by another stack
+    pubSubPort: 4011 # port to run the MQ publisher/subscribers
+    debug: true # flag to show debug messages
+    account: '' # account id that gets passed to the event
+  serverless-offline:
+    lambdaPort: 3017 # Use a different port avoid conflicts while multiple stacks are running
+    httpPort: 3016 # Use a different port avoid conflicts while multiple stacks are running
