@@ -19,6 +19,8 @@ Install the plugin
 npm install serverless-offline-aws-eventbridge --save
 ```
 
+Note: if you are running Serverless-(offline) > 9 you need the beta version (2.0.0-beta.0) of this package since they converted the SLS offline package to a pure esm module that does not export internals. See https://github.com/rubenkaiser/serverless-offline-eventBridge/issues/60
+
 Let serverless know about the plugin, also note the order when combined with serverless webpack and offline
 ```YAML
 plugins:
