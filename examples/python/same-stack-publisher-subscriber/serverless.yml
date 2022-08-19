@@ -1,4 +1,4 @@
-service: elasticsearch-sync
+service: same-stack-publisher-subscriber
 
 provider:
   name: aws

@@ -1,4 +1,4 @@
-service: elasticsearch-sync
+service: remote-subscriber
 
 provider:
   name: aws
