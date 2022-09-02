@@ -1,15 +1,11 @@
-"use strict";
+import { createServer } from "node:net";
+import aedes from "aedes";
+import cors from "cors";
+import express from "express";
+import mqtt from "mqtt";
+import cron from "node-cron";
 
-const fs = require("fs");
-const express = require("express");
-const cron = require("node-cron");
-const cors = require("cors");
-const aedes = require("aedes");
-const net = require("net");
-const mqtt = require("mqtt");
-// const Lambda = require("serverless-offline/dist/lambda").default;
-
-class ServerlessOfflineAwsEventbridgePlugin {
+export default class ServerlessOfflineAwsEventbridgePlugin {
   constructor(serverless, options) {
     this.serverless = serverless;
     this.lambda = null;
@@ -42,25 +38,6 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
   async start() {
     this.log("start");
-
-    /*
-     * UGLY HACK FOR NOW
-     * remove exports from serverless-offline package
-     */
-    try {
-      const data = await fs.promises.readFile(
-        "./node_modules/serverless-offline/package.json"
-      );
-      const parsedData = JSON.parse(data);
-      delete parsedData.exports;
-      await fs.promises.writeFile(
-        "./node_modules/serverless-offline/package.json",
-        JSON.stringify(parsedData)
-      );
-      this.log("Exports removed from packagejson of serverless-offline");
-    } catch (e) {
-      this.log("error", e);
-    }
 
     await this.init();
 
@@ -100,7 +77,7 @@ class ServerlessOfflineAwsEventbridgePlugin {
 
     // If the stack receives EventBridge events, start the MQ broker as well
     if (this.mockEventBridgeServer) {
-      this.mqServer = net.createServer(aedes().handle);
+      this.mqServer = createServer(aedes().handle);
       this.mqServer.listen(this.pubSubPort, () => {
         this.log(
           `MQTT Broker started and listening on port ${this.pubSubPort}`
@@ -272,7 +249,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
             err.message || err
           } occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
         );
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        await new Promise((resolve) => {
+          setTimeout(resolve, retryDelayMs);
+        });
         await this.invokeSubscriber(functionKey, entry, retry + 1);
         return;
       }
@@ -286,9 +265,9 @@ class ServerlessOfflineAwsEventbridgePlugin {
   }
 
   async createLambda(lambdas) {
-    const { default: Lambda } = await import(
-      "serverless-offline/src/lambda/index.js"
-    );
+    // https://github.com/import-js/eslint-plugin-import/issues/2495
+    // eslint-disable-next-line import/no-unresolved
+    const { default: Lambda } = await import("serverless-offline/lambda");
     this.lambda = new Lambda(this.serverless, this.options);
     this.lambda.create(lambdas);
   }
@@ -588,5 +567,3 @@ class ServerlessOfflineAwsEventbridgePlugin {
       );
   }
 }
-
-module.exports = ServerlessOfflineAwsEventbridgePlugin;

@@ -2,7 +2,8 @@
   "name": "serverless-offline-aws-eventbridge",
   "version": "1.6.7",
   "description": "Serverless plugin to run eventbridge offline.",
-  "main": "src/index.js",
+  "type": "module",
+  "exports": "./src/index.js",
   "author": "Ruben Kaiser",
   "license": "MIT",
   "scripts": {
@@ -11,22 +12,22 @@
     "prepublishOnly": "npm run lint"
   },
   "devDependencies": {
-    "eslint": "^7.9.0",
-    "eslint-config-airbnb-base": "^14.2.0",
-    "eslint-config-prettier": "^6.11.0",
-    "eslint-plugin-import": "^2.22.0",
-    "eslint-plugin-prettier": "^3.1.4",
-    "prettier": "^2.1.1"
+    "eslint": "^8.23.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.7.1"
   },
   "dependencies": {
-    "aedes": "^0.46.0",
+    "aedes": "^0.47.0",
     "cors": "^2.8.5",
-    "express": "^4.17.1",
-    "mqtt": "^4.2.6",
-    "node-cron": "^3.0.0"
+    "express": "^4.18.1",
+    "mqtt": "^4.3.7",
+    "node-cron": "^3.0.2"
   },
   "peerDependencies": {
-    "serverless-offline": ">5"
+    "serverless-offline": "^9.3.1"
   },
   "repository": {
     "type": "git",
