@@ -1,4 +1,4 @@
-import { createServer } from "node:net";
+import { createServer } from "net";
 import aedes from "aedes";
 import cors from "cors";
 import express from "express";

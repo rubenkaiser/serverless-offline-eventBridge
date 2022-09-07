@@ -19,7 +19,7 @@ Install the plugin
 npm install serverless-offline-aws-eventbridge --save
 ```
 
-Note: if you are running Serverless-(offline) > 9 you need the beta version (2.0.0-beta.0) of this package since they converted the SLS offline package to a pure esm module that does not export internals. See https://github.com/rubenkaiser/serverless-offline-eventBridge/issues/60
+Note: if you are running Serverless-(offline) < 10 you need the a version < 2.0.0 of this package since the SLS offline and this eventbridge package were converted to a pure esm module that utilizes the exports functionality. See https://github.com/rubenkaiser/serverless-offline-eventBridge/issues/60
 
 Let serverless know about the plugin, also note the order when combined with serverless webpack and offline
 ```YAML
@@ -233,8 +233,5 @@ Simply hit the exposed API gateway endpoint: http://localhost:3016/dev/publish
 You should see the message received on both stacks in the terminal output. You will also notice that the socket connection is resilient to crashes: everything works smoothly as soon as both offline stacks are up and running, regardless of which stack has been restarted last.
 
 
-## Versions
-This plugin was created using node 12.16.1 and serverless framework core 1.67.0.
-
 ## Thanks
-This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans, @JamesKyburz, @plumsirawit, @damien-thiesson and @carrickkv2 for their work and PR's.
+This plugin was inspired by the serverless-offline-sns plugin. Also thanks to @sndpl, @guavajellyaaron, @rloomans, @JamesKyburz, @plumsirawit, @damien-thiesson, @carrickkv2 and @dnalborczyk for their work and PR's.
