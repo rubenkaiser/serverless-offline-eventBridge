@@ -391,37 +391,37 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
     if (filterType === "prefix") {
       return content.startsWith(pattern.prefix);
     }
-    
+
     if ("numeric" in pattern) {
       // partition an array to be like [[">", 5], ["=",30]]
       const chunk = (arr = [], num = 2) => {
-        if (arr.length === 0) return arr
-        return Array(arr.splice(0, num)).concat(chunk(arr, num))
-      }
+        if (arr.length === 0) return arr;
+        return Array(arr.splice(0, num)).concat(chunk(arr, num));
+      };
 
       // persist pattern for preventing to mutate an array.
-      const origin = [...pattern['numeric']]
+      const origin = [...pattern.numeric];
 
-      const operationGroups = chunk(origin, 2)
+      const operationGroups = chunk(origin, 2);
 
       // Expected all event pattern should be true
       const isValid = operationGroups.every((arr) => {
-        const lvalue = parseFloat(content)
-        const rvalue =  parseFloat(arr[arr.length - 1])
-        const operator = arr[0]
+        const lvalue = parseFloat(content);
+        const rvalue = parseFloat(arr[arr.length - 1]);
+        const operator = arr[0];
 
         const isCheckingWithOperation = {
-          '>': lvalue > rvalue,
-          '<': lvalue < rvalue,
-          '>=': lvalue >= rvalue,
-          '<=': lvalue <= rvalue,
-          '=': lvalue == rvalue,
-        }[operator]
+          ">": lvalue > rvalue,
+          "<": lvalue < rvalue,
+          ">=": lvalue >= rvalue,
+          "<=": lvalue <= rvalue,
+          "=": lvalue === rvalue,
+        }[operator];
 
-        return isCheckingWithOperation
-      })
+        return isCheckingWithOperation;
+      });
 
-      return isValid
+      return isValid;
     }
 
     // "cidr" filters and the recurring logic are yet supported by this plugin.
