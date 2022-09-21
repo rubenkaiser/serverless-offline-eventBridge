@@ -398,18 +398,18 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
         if (arr.length === 0) return arr
         return Array(arr.splice(0, num)).concat(chunk(arr, num))
       }
-      
+
       // persist pattern for preventing to mutate an array.
       const origin = [...pattern['numeric']]
-      
+
       const operationGroups = chunk(origin, 2)
-      
+
       // Expected all event pattern should be true
-      const isValid = groupping.every((arr) => {
+      const isValid = operationGroups.every((arr) => {
         const lvalue = parseFloat(content)
         const rvalue =  parseFloat(arr[arr.length - 1])
         const operator = arr[0]
-        
+
         const isCheckingWithOperation = {
           '>': lvalue > rvalue,
           '<': lvalue < rvalue,
@@ -420,7 +420,7 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
 
         return isCheckingWithOperation
       })
-      
+
       return isValid
     }
 
