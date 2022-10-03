@@ -519,6 +519,8 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
                 )}`;
                 // replace ? by * for node-cron
                 convertedSchedule = convertedSchedule.split("?").join("*");
+                // replace 0/x by */x for node-cron
+                convertedSchedule = convertedSchedule.replaceAll(/0\//gi, "*/");
               }
               if (convertedSchedule) {
                 scheduledEvents.push({
