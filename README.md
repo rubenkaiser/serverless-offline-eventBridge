@@ -3,6 +3,7 @@ A serverless offline plugin that enables aws eventBridge events. As of version 1
 
 [![serverless](http://public.serverless.com/badges/v3.svg)](http://www.serverless.com)
 [![npm version](https://badge.fury.io/js/serverless-offline-aws-eventbridge.svg)](https://badge.fury.io/js/serverless-offline-aws-eventbridge)
+[![npm package](https://img.shields.io/npm/dm/serverless-offline-aws-eventbridge.svg)](https://www.npmjs.com/package/parcel-transformer-html-partials)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Docs
