@@ -479,62 +479,70 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
       if (functionDefinition.events) {
         for (const event of functionDefinition.events) {
           if (event.eventBridge) {
-            if (!event.eventBridge.schedule) {
-              subscribers.push({
-                event: event.eventBridge,
-                functionKey,
-              });
-            } else {
-              let convertedSchedule;
-
-              if (event.eventBridge.schedule.indexOf("rate") > -1) {
-                const rate = event.eventBridge.schedule
-                  .replace("rate(", "")
-                  .replace(")", "");
-
-                const parts = rate.split(" ");
-
-                if (parts[1]) {
-                  if (parts[1].startsWith("minute")) {
-                    convertedSchedule = `*/${parts[0]} * * * *`;
-                  } else if (parts[1].startsWith("hour")) {
-                    convertedSchedule = `0 */${parts[0]} * * *`;
-                  } else if (parts[1].startsWith("day")) {
-                    convertedSchedule = `0 0 */${parts[0]} * *`;
-                  } else {
-                    this.log(
-                      `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
-                    );
-                  }
-                }
-              } else {
-                // get the cron job syntax right: cron(0 5 * * ? *)
-                //
-                //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
-                // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
-                // seconds is optional so we don't use it with node-cron
-                convertedSchedule = `${event.eventBridge.schedule.substring(
-                  5,
-                  event.eventBridge.schedule.length - 3
-                )}`;
-                // replace ? by * for node-cron
-                convertedSchedule = convertedSchedule.split("?").join("*");
-                // replace 0/x by */x for node-cron
-                convertedSchedule = convertedSchedule.replaceAll(/0\//gi, "*/");
-              }
-              if (convertedSchedule) {
-                scheduledEvents.push({
-                  schedule: convertedSchedule,
+            if (
+              typeof event.eventBridge.enabled === "undefined" ||
+              event.eventBridge.enabled === true
+            ) {
+              if (!event.eventBridge.schedule) {
+                subscribers.push({
                   event: event.eventBridge,
                   functionKey,
                 });
-                this.log(
-                  `Scheduled '${functionKey}' with syntax ${convertedSchedule}`
-                );
               } else {
-                this.log(
-                  `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
-                );
+                let convertedSchedule;
+
+                if (event.eventBridge.schedule.indexOf("rate") > -1) {
+                  const rate = event.eventBridge.schedule
+                    .replace("rate(", "")
+                    .replace(")", "");
+
+                  const parts = rate.split(" ");
+
+                  if (parts[1]) {
+                    if (parts[1].startsWith("minute")) {
+                      convertedSchedule = `*/${parts[0]} * * * *`;
+                    } else if (parts[1].startsWith("hour")) {
+                      convertedSchedule = `0 */${parts[0]} * * *`;
+                    } else if (parts[1].startsWith("day")) {
+                      convertedSchedule = `0 0 */${parts[0]} * *`;
+                    } else {
+                      this.log(
+                        `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
+                      );
+                    }
+                  }
+                } else {
+                  // get the cron job syntax right: cron(0 5 * * ? *)
+                  //
+                  //      min     hours       dayOfMonth  Month       DayOfWeek   Year        (AWS)
+                  // sec  min     hour        dayOfMonth  Month       DayOfWeek               (node-cron)
+                  // seconds is optional so we don't use it with node-cron
+                  convertedSchedule = `${event.eventBridge.schedule.substring(
+                    5,
+                    event.eventBridge.schedule.length - 3
+                  )}`;
+                  // replace ? by * for node-cron
+                  convertedSchedule = convertedSchedule.split("?").join("*");
+                  // replace 0/x by */x for node-cron
+                  convertedSchedule = convertedSchedule.replaceAll(
+                    /0\//gi,
+                    "*/"
+                  );
+                }
+                if (convertedSchedule) {
+                  scheduledEvents.push({
+                    schedule: convertedSchedule,
+                    event: event.eventBridge,
+                    functionKey,
+                  });
+                  this.log(
+                    `Scheduled '${functionKey}' with syntax ${convertedSchedule}`
+                  );
+                } else {
+                  this.log(
+                    `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
+                  );
+                }
               }
             }
           }
