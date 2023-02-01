@@ -44,6 +44,7 @@ custom:
     account: '' # account id that gets passed to the event
     maximumRetryAttempts: 10 # maximumRetryAttempts to retry lambda
     retryDelayMs: 500 # retry delay
+    throwRetryExhausted: false # default true
     payloadSizeLimit: "10mb" # Controls the maximum payload size being passed to https://www.npmjs.com/package/bytes (Note: this payload size might not be the same size as your AWS Eventbridge receive)
 ```
 
