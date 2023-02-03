@@ -126,6 +126,10 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
       this.options.retryDelayMs = 500;
     }
 
+    if (typeof this.options.throwRetryExhausted === "undefined") {
+      this.options.throwRetryExhausted = true;
+    }
+
     const { subscribers, lambdas, scheduledEvents } = this.getEvents();
 
     this.eventBuses = this.extractCustomBuses();
@@ -233,7 +237,7 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
   }
 
   async invokeSubscriber(functionKey, entry, retry = 0) {
-    const { retryDelayMs, maximumRetryAttempts: maxRetries } = this.options;
+    const { retryDelayMs, maximumRetryAttempts: maxRetries, throwRetryExhausted } = this.options;
     const lambdaFunction = this.lambda.get(functionKey);
     const event = this.convertEntryToEvent(entry);
     lambdaFunction.setEvent(event);
@@ -260,7 +264,9 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
           err.message || err
         } occurred in ${functionKey} on attempt ${retry}, max attempts reached`
       );
-      throw err;
+      if (throwRetryExhausted) {
+        throw err;
+      }
     }
   }
 
