@@ -209,6 +209,9 @@ custom:
 
 If your existing EventBridge is mocked on a different host/IP (e.g. When stacks are hosted in Docker containers), then you will also need to specify a `hostname`. If using Docker, you should use the name of the container that mocks the EventBridge (assuming both containers are on the same Docker network).
 
+### Localstack
+To be written.
+
 ## Examples
 
 Two stacks are provided as example:
