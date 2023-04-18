@@ -1,4 +1,4 @@
-export interface Config {
+export interface EventBridgePluginConfigOptions {
   port?: number;
   mockEventBridgeServer?: boolean;
   hostname?: string;

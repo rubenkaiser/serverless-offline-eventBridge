@@ -1,4 +1,3 @@
-/* eslint-disable import/no-unresolved */
 /* eslint-disable import/no-import-module-exports */
 import type Serverless from "serverless";
 import type { Hooks, Logging } from "serverless/classes/Plugin";
@@ -14,37 +13,21 @@ import * as express from "express";
 import * as mqtt from "mqtt";
 import * as cron from "node-cron";
 import { EventBridge } from "serverless/plugins/aws/provider/awsProvider";
-import { Config } from "./types/config-interface";
-import { Options } from "./types/options-interface";
+import { EventBridgePluginConfigOptions } from "./types/event-bridge-plugin-options-interface";
+import { PluginOptions } from "./types/plugin-options-interface";
+import { Config } from "./config/interfaces/config-interface";
+import { setConfig } from "./config/config";
 
 class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   public hooks: Hooks;
 
-  public region: string = "us-east-1";
-
-  public lambda?: LambdaType;
-
   public config?: Config;
 
-  public port?: number;
-
-  public hostname?: string;
-
-  public pubSubPort?: number;
-
-  public account?: string;
-
-  public debug?: boolean;
-
-  public importedEventBuses: { [key: string]: string } = {};
+  public lambda?: LambdaType;
 
   public app?: Express;
 
   public eventBridgeServer?: Server;
-
-  public mockEventBridgeServer?: boolean;
-
-  public payloadSizeLimit?: string;
 
   public mqServer?: netServer;
 
@@ -62,7 +45,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
   constructor(
     private readonly serverless: Serverless,
-    private options: Options,
+    private options: PluginOptions,
     private readonly logging: Logging
   ) {
     this.hooks = {
@@ -77,13 +60,15 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
     await this.init();
 
-    if (this.mockEventBridgeServer) {
+    if (this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer) {
       if (!this.app) {
         throw new Error("Express app not running");
       }
 
       // Start Express Server
-      this.eventBridgeServer = this.app.listen(this.port);
+      this.eventBridgeServer = this.app.listen(
+        this.config?.eventBridgeMockServerConfig.mockServerPort
+      );
     }
   }
 
@@ -95,43 +80,56 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       this.eventBridgeServer.close();
     }
 
-    if (this.lambda) await this.lambda.cleanup();
+    if (this.lambda) {
+      await this.lambda.cleanup();
+    }
   }
 
   async init() {
-    this.config =
+    const pluginOptions = this.setupPluginOptions();
+
+    const pluginConfig: EventBridgePluginConfigOptions =
       this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
       {};
-    this.port = this.config?.port || 4010;
-    this.mockEventBridgeServer = this.config?.mockEventBridgeServer || true;
-    this.hostname = this.config?.hostname || "127.0.0.1";
-    this.pubSubPort = this.config?.pubSubPort || 4011;
-    this.account = this.config?.account || "";
-    this.region = this.serverless.service.provider.region || this.region;
-    this.debug = this.config?.debug || false;
-    this.importedEventBuses = this.config?.["imported-event-buses"] || {};
-    this.payloadSizeLimit = this.config?.payloadSizeLimit || "10mb";
 
-    const {
-      service: { custom = {}, provider },
-    } = this.serverless;
+    this.config = setConfig({
+      awsConfig: {
+        region: this.serverless.service.provider.region,
+        accountId: pluginConfig?.account,
+      },
+      eventBridgeMockServerConfig: {
+        shouldMockEventBridgeServer: pluginConfig.mockEventBridgeServer,
+        mockServerPort: pluginConfig?.port,
+        mockMqttClientHostname: pluginConfig.hostname,
+        mockMqttClientPubSubPort: pluginConfig.pubSubPort,
+        payloadSizeLimit: pluginConfig.payloadSizeLimit,
+        importedEventBuses: pluginConfig["imported-event-buses"],
+      },
+      pluginConfigOptions: pluginConfig,
+      pluginOptions,
+    });
 
-    // If the stack receives EventBridge events, start the MQ broker as well
-    if (this.mockEventBridgeServer) {
-      this.mqServer = createServer((Aedes as any)().handle);
-      this.mqServer.listen(this.pubSubPort, () => {
-        this.log(
-          `MQTT Broker started and listening on port ${this.pubSubPort}`
-        );
-      });
-    }
+    const { subscribers, lambdas, scheduledEvents } = this.getEvents();
+    this.subscribers = subscribers;
+    this.scheduledEvents = scheduledEvents;
+    this.eventBuses = this.extractCustomBuses();
 
+    this.setupMqBroker();
+    this.setupMqClient();
+    this.setupScheduledEvents();
+    await this.createLambdas(lambdas);
+    this.setupExpressApp();
+  }
+
+  private setupMqClient() {
     // Connect to the MQ server for any lambdas listening to EventBridge events
-    this.mqClient = mqtt.connect(`mqtt://${this.hostname}:${this.pubSubPort}`);
+    this.mqClient = mqtt.connect(
+      `mqtt://${this.config?.eventBridgeMockServerConfig.mockMqttClientHostname}:${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
+    );
 
     this.mqClient.on("connect", () => {
       if (!this.mqClient) {
-        throw new Error("No this.mqClient");
+        throw new Error("this.mqClient not present");
       }
 
       this.mqClient.subscribe("eventBridge", (_err, granted) => {
@@ -140,7 +138,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         if (!granted || granted.length === 0) return;
 
         this.log(
-          `MQTT broker connected and listening on mqtt://${this.hostname}:${this.pubSubPort}`
+          `MQTT broker connected and listening on mqtt://${this.config?.eventBridgeMockServerConfig.mockMqttClientHostname}:${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
         );
 
         if (!this.mqClient) {
@@ -156,6 +154,27 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         });
       });
     });
+  }
+
+  private setupMqBroker() {
+    // If the stack receives EventBridge events, start the MQ broker as well
+    if (this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer) {
+      this.mqServer = createServer((Aedes as any)().handle);
+      this.mqServer.listen(
+        this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort,
+        () => {
+          this.log(
+            `MQTT Broker started and listening on port ${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
+          );
+        }
+      );
+    }
+  }
+
+  private setupPluginOptions() {
+    const {
+      service: { custom = {}, provider },
+    } = this.serverless;
 
     const offlineOptions = custom["serverless-offline"];
     const offlineEventBridgeOptions =
@@ -180,39 +199,24 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       this.options.throwRetryExhausted = true;
     }
 
-    const { subscribers, lambdas, scheduledEvents } = this.getEvents();
+    return this.options;
+  }
 
-    this.eventBuses = this.extractCustomBuses();
-
-    this.scheduledEvents = scheduledEvents;
-    // loop the scheduled events and create a cron for them
-    this.scheduledEvents.forEach((scheduledEvent) => {
-      cron.schedule(scheduledEvent.schedule, async () => {
-        if (this.debug) {
-          this.log(`run scheduled function ${scheduledEvent.functionKey}`);
-        }
-        this.invokeSubscriber(scheduledEvent.functionKey, {
-          Source: `Scheduled function ${scheduledEvent.functionKey}`,
-          Resources: [],
-          Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
-        });
-      });
-    });
-
-    await this.createLambda(lambdas);
-    this.subscribers = subscribers;
-
+  private setupExpressApp() {
     // initialise the express app
     this.app = express();
     this.app.use(cors());
     this.app.use(
       express.json({
         type: "application/x-amz-json-1.1",
-        limit: this.payloadSizeLimit,
+        limit: this.config?.eventBridgeMockServerConfig.payloadSizeLimit,
       })
     );
     this.app.use(
-      express.urlencoded({ extended: true, limit: this.payloadSizeLimit })
+      express.urlencoded({
+        extended: true,
+        limit: this.config?.eventBridgeMockServerConfig.payloadSizeLimit,
+      })
     );
     this.app.use((_req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
@@ -233,6 +237,20 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       }
       res.json(this.generateEventBridgeResponse(req.body.Entries));
       res.status(200).send();
+    });
+  }
+
+  private setupScheduledEvents() {
+    // loop the scheduled events and create a cron for them
+    this.scheduledEvents.forEach((scheduledEvent) => {
+      cron.schedule(scheduledEvent.schedule, async () => {
+        this.log(`run scheduled function ${scheduledEvent.functionKey}`);
+        this.invokeSubscriber(scheduledEvent.functionKey, {
+          Source: `Scheduled function ${scheduledEvent.functionKey}`,
+          Resources: [],
+          Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
+        });
+      });
     });
   }
 
@@ -298,8 +316,8 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     } = this.options;
 
     if (!this.lambda) {
-      throw new Error(":ambda not present");
-    };
+      throw new Error("Lambda not present");
+    }
 
     const lambdaFunction = this.lambda.get(functionKey);
     const event = this.convertEntryToEvent(entry);
@@ -333,11 +351,10 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
   }
 
-  async createLambda(lambdas: Array<LambdaType>) {
+  async createLambdas(lambdas: Array<LambdaType>) {
     // https://github.com/import-js/eslint-plugin-import/issues/2495
     // eslint-disable-next-line import/no-unresolved, prettier/prettier
     const { default: Lambda } = (await import("serverless-offline/lambda") as any);
-    // const { Lambda } = await import("serverless-offline/lambda");
     this.lambda = new Lambda(this.serverless, this.options) as LambdaType;
     this.lambda.create(lambdas);
   }
@@ -493,13 +510,15 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         const rvalue = parseFloat(arr[arr.length - 1]);
         const operator = arr[0];
 
-        const isCheckingWithOperation = ({
-          ">": lvalue > rvalue,
-          "<": lvalue < rvalue,
-          ">=": lvalue >= rvalue,
-          "<=": lvalue <= rvalue,
-          "=": lvalue === rvalue,
-        } as any)[operator];
+        const isCheckingWithOperation = (
+          {
+            ">": lvalue > rvalue,
+            "<": lvalue < rvalue,
+            ">=": lvalue >= rvalue,
+            "<=": lvalue <= rvalue,
+            "=": lvalue === rvalue,
+          } as any
+        )[operator];
 
         return isCheckingWithOperation;
       });
@@ -539,8 +558,12 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       const importedResourceName = eventBus["Fn::ImportValue"];
 
       return (
-        this.importedEventBuses[importedResourceName] &&
-        this.importedEventBuses[importedResourceName].includes(eventBusName)
+        this.config?.eventBridgeMockServerConfig.importedEventBuses[
+          importedResourceName
+        ] &&
+        this.config?.eventBridgeMockServerConfig.importedEventBuses[
+          importedResourceName
+        ].includes(eventBusName)
       );
     }
 
@@ -646,9 +669,9 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         version: "0",
         id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
         source: entry.Source,
-        account: this.account,
+        account: this.config?.awsConfig.accountId,
         time: new Date().toISOString(),
-        region: this.region,
+        region: this.config?.awsConfig.region,
         resources: entry.Resources || [],
         detail: JSON.parse(entry.Detail),
       };
@@ -660,7 +683,9 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       return event;
     } catch (error) {
       this.log(
-        `error converting entry to event: ${(error as Error).message}. returning entry instead`
+        `error converting entry to event: ${
+          (error as Error).message
+        }. returning entry instead`
       );
       return {
         ...entry,
@@ -686,10 +711,11 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   }
 
   log(message: string) {
-    if (this.debug)
-      this.serverless.cli.log(
+    if (this.config?.pluginConfigOptions?.debug) {
+      this.logging.log.notice(
         `serverless-offline-aws-eventbridge :: ${message}`
       );
+    }
   }
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable class-methods-use-this */
 /* eslint-disable import/prefer-default-export */
 
 declare module "serverless-offline/lambda" {
@@ -22,7 +23,7 @@ declare module "serverless-offline/lambda" {
       this.#lambdaFunctionNamesKeys.set(functionDefinition.name, functionKey);
     }
 
-    create(lambdas) {
+    create(lambdas: Array<Lambda>) {
       lambdas.forEach(({ functionKey, functionDefinition }) => {
         this.#createEvent(functionKey, functionDefinition);
       });
@@ -58,12 +59,10 @@ declare module "serverless-offline/lambda" {
     }
 
     // stops the server
-    stop(timeout) {
-      return;
-    }
+    stop(_timeout) {}
 
     cleanup() {
-      return;
+      return Promise.resolve();
     }
   }
 }

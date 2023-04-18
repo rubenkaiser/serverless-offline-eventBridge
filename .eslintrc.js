@@ -18,6 +18,8 @@ module.exports = {
   rules: {
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "import/extensions": 0,
+    "import/no-unresolved": 0,
+    "import/prefer-default-export": 0,
     'prettier/prettier': [
       'error',
       {
