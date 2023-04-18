@@ -1,5 +1,5 @@
 export interface AwsConfig {
-    region: string;
-    endpoint?: string;
-    accountId?: string;
-};
+  region: string;
+  endpoint?: string;
+  accountId?: string;
+}

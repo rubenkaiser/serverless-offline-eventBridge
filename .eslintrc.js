@@ -16,6 +16,7 @@ module.exports = {
     jest: true,
   },
   rules: {
+    "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "import/extensions": 0,
     "import/no-unresolved": 0,

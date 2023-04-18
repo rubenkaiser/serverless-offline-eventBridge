@@ -8,9 +8,10 @@
   "scripts": {
     "build": "tsc -p .",
     "lint": "eslint .",
-    "format": "eslint . --fix",
+    "format": "eslint . --fix --ext .js,.ts,.d.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepublishOnly": "npm run lint"
+    "prepublishOnly": "npm run lint",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",
@@ -30,7 +31,8 @@
     "serverless-offline": "^12.0.4",
     "ts-node": "^10.9.1",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "husky": "^8.0.0"
   },
   "dependencies": {
     "aedes": "^0.49.0",

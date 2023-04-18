@@ -577,12 +577,14 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     const scheduledEvents = [];
     const lambdas: Array<LambdaType> = [];
 
+    // eslint-disable-next-line no-restricted-syntax
     for (const functionKey of functionKeys) {
       const functionDefinition = service.getFunction(functionKey);
 
       lambdas.push({ functionKey, functionDefinition } as any);
 
       if (functionDefinition.events) {
+        // eslint-disable-next-line no-restricted-syntax
         for (const event of functionDefinition.events) {
           if (event.eventBridge) {
             if (
