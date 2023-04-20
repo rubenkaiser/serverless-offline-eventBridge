@@ -21,10 +21,14 @@ module.exports = {
     "import/extensions": 0,
     "import/no-unresolved": 0,
     "import/prefer-default-export": 0,
+    "no-shadow": "off",
+    "dot-notation": "off",
+    "@typescript-eslint/no-shadow": "warn",
     'prettier/prettier': [
       'error',
       {
         'endOfLine': 'auto',
+        singleQuote: true,
       }
     ]
   },

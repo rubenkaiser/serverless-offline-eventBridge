@@ -1,22 +1,24 @@
 /* eslint-disable import/no-import-module-exports */
-import type Serverless from "serverless";
-import type { Hooks, Logging } from "serverless/classes/Plugin";
-import type Plugin from "serverless/classes/Plugin";
-import type { Express } from "express";
-import type { Server } from "http";
+import type Serverless from 'serverless';
+import type { Hooks, Logging } from 'serverless/classes/Plugin';
+import type Plugin from 'serverless/classes/Plugin';
+import type { Express } from 'express';
+import type { Server } from 'http';
 
-import type { Lambda as LambdaType } from "serverless-offline/lambda";
-import { createServer, Server as netServer } from "net";
-import * as Aedes from "aedes";
-import * as cors from "cors";
-import * as express from "express";
-import * as mqtt from "mqtt";
-import * as cron from "node-cron";
-import { EventBridge } from "serverless/plugins/aws/provider/awsProvider";
-import { EventBridgePluginConfigOptions } from "./types/event-bridge-plugin-options-interface";
-import { PluginOptions } from "./types/plugin-options-interface";
-import { Config } from "./config/interfaces/config-interface";
-import { setConfig } from "./config/config";
+import type { Lambda as LambdaType } from 'serverless-offline/lambda';
+import { createServer, Server as netServer } from 'net';
+import * as Aedes from 'aedes';
+import * as cors from 'cors';
+import * as express from 'express';
+import * as mqtt from 'mqtt';
+import * as cron from 'node-cron';
+import { EventBridge } from 'serverless/plugins/aws/provider/awsProvider';
+import { EventBridgePluginConfigOptions } from './types/event-bridge-plugin-options-interface';
+import { PluginOptions } from './types/plugin-options-interface';
+import { Config } from './config/interfaces/config-interface';
+import { setConfig } from './config/config';
+import { Subscriber } from './types/subscriber-interface';
+import { createEventBridgeResources } from './integrations/localstack';
 
 class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   public hooks: Hooks;
@@ -35,7 +37,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
   public eventBuses: { [key: string]: string } = {};
 
-  public subscribers: Array<{ event: EventBridge; functionKey: string }> = [];
+  public subscribers: Array<Subscriber> = [];
 
   public scheduledEvents: Array<{
     schedule: string;
@@ -48,33 +50,44 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     private options: PluginOptions,
     private readonly logging: Logging
   ) {
+    this.logDebug = this.logDebug.bind(this);
+    this.logNotice = this.logNotice.bind(this);
+
     this.hooks = {
-      "before:offline:start": () => this.start(),
-      "before:offline:start:init": () => this.start(),
-      "after:offline:start:end": () => this.stop(),
+      'before:offline:start': () => this.start(),
+      'before:offline:start:init': () => this.start(),
+      'after:offline:start:end': () => this.stop(),
     };
   }
 
   async start() {
-    this.log("start");
+    this.logDebug('start');
 
     await this.init();
 
-    if (this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer) {
+    if (
+      !this.config?.localStackConfig.localStackEnabled &&
+      this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer
+    ) {
       if (!this.app) {
-        throw new Error("Express app not running");
+        throw new Error('Express app not running');
       }
 
       // Start Express Server
       this.eventBridgeServer = this.app.listen(
-        this.config?.eventBridgeMockServerConfig.mockServerPort
+        this.config?.eventBridgeMockServerConfig.mockServerPort,
+        () => {
+          this.logNotice(
+            `Mock server running at port: ${this.config?.eventBridgeMockServerConfig.mockServerPort}`
+          );
+        }
       );
     }
   }
 
   async stop() {
     this.init();
-    this.log("stop");
+    this.logDebug('stop');
 
     if (this.eventBridgeServer) {
       this.eventBridgeServer.close();
@@ -89,7 +102,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     const pluginOptions = this.setupPluginOptions();
 
     const pluginConfig: EventBridgePluginConfigOptions =
-      this.serverless.service.custom["serverless-offline-aws-eventbridge"] ||
+      this.serverless.service.custom['serverless-offline-aws-eventbridge'] ||
       {};
 
     this.config = setConfig({
@@ -97,13 +110,17 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         region: this.serverless.service.provider.region,
         accountId: pluginConfig?.account,
       },
+      localStackConfig: {
+        localStackEnabled: !!pluginConfig.localStackConfig,
+        localStackEndpoint: pluginConfig.localStackConfig?.localStackEndpoint,
+      },
       eventBridgeMockServerConfig: {
         shouldMockEventBridgeServer: pluginConfig.mockEventBridgeServer,
         mockServerPort: pluginConfig?.port,
         mockMqttClientHostname: pluginConfig.hostname,
         mockMqttClientPubSubPort: pluginConfig.pubSubPort,
         payloadSizeLimit: pluginConfig.payloadSizeLimit,
-        importedEventBuses: pluginConfig["imported-event-buses"],
+        importedEventBuses: pluginConfig['imported-event-buses'],
       },
       pluginConfigOptions: pluginConfig,
       pluginOptions,
@@ -114,11 +131,35 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     this.scheduledEvents = scheduledEvents;
     this.eventBuses = this.extractCustomBuses();
 
-    this.setupMqBroker();
-    this.setupMqClient();
-    this.setupScheduledEvents();
-    await this.createLambdas(lambdas);
-    this.setupExpressApp();
+    if (this.config?.localStackConfig.localStackEnabled) {
+      this.logNotice(`Localstack config active`);
+      await this.setupLocalStack();
+    }
+
+    if (!this.config?.localStackConfig.localStackEnabled) {
+      this.setupMqBroker();
+      this.setupMqClient();
+      this.setupScheduledEvents();
+      await this.createLambdas(lambdas);
+      this.setupExpressApp();
+    }
+
+    this.logNotice('Plugin ready');
+  }
+
+  private setupMqBroker() {
+    // If the stack receives EventBridge events, start the MQ broker as well
+    if (this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer) {
+      this.mqServer = createServer((Aedes as any)().handle);
+      this.mqServer.listen(
+        this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort,
+        () => {
+          this.logDebug(
+            `MQTT Broker started and listening on port ${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
+          );
+        }
+      );
+    }
   }
 
   private setupMqClient() {
@@ -127,25 +168,25 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       `mqtt://${this.config?.eventBridgeMockServerConfig.mockMqttClientHostname}:${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
     );
 
-    this.mqClient.on("connect", () => {
+    this.mqClient.on('connect', () => {
       if (!this.mqClient) {
-        throw new Error("this.mqClient not present");
+        throw new Error('this.mqClient not present');
       }
 
-      this.mqClient.subscribe("eventBridge", (_err, granted) => {
+      this.mqClient.subscribe('eventBridge', (_err, granted) => {
         // if the client is already subscribed, granted will be an empty array.
         // This prevents duplicate message processing when the client reconnects
         if (!granted || granted.length === 0) return;
 
-        this.log(
+        this.logDebug(
           `MQTT broker connected and listening on mqtt://${this.config?.eventBridgeMockServerConfig.mockMqttClientHostname}:${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
         );
 
         if (!this.mqClient) {
-          throw new Error("No this.mqClient");
+          throw new Error('No this.mqClient');
         }
 
-        this.mqClient.on("message", async (_topic, message) => {
+        this.mqClient.on('message', async (_topic, message) => {
           const entries = JSON.parse(message.toString());
           const invokedLambdas = this.invokeSubscribers(entries);
           if (invokedLambdas.length) {
@@ -156,29 +197,14 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     });
   }
 
-  private setupMqBroker() {
-    // If the stack receives EventBridge events, start the MQ broker as well
-    if (this.config?.eventBridgeMockServerConfig.shouldMockEventBridgeServer) {
-      this.mqServer = createServer((Aedes as any)().handle);
-      this.mqServer.listen(
-        this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort,
-        () => {
-          this.log(
-            `MQTT Broker started and listening on port ${this.config?.eventBridgeMockServerConfig.mockMqttClientPubSubPort}`
-          );
-        }
-      );
-    }
-  }
-
   private setupPluginOptions() {
     const {
       service: { custom = {}, provider },
     } = this.serverless;
 
-    const offlineOptions = custom["serverless-offline"];
+    const offlineOptions = custom['serverless-offline'];
     const offlineEventBridgeOptions =
-      custom["serverless-offline-aws-eventbridge"];
+      custom['serverless-offline-aws-eventbridge'];
 
     this.options = {
       ...this.options,
@@ -187,15 +213,15 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       ...offlineEventBridgeOptions,
     };
 
-    if (typeof this.options.maximumRetryAttempts === "undefined") {
+    if (typeof this.options.maximumRetryAttempts === 'undefined') {
       this.options.maximumRetryAttempts = 10;
     }
 
-    if (typeof this.options.retryDelayMs === "undefined") {
+    if (typeof this.options.retryDelayMs === 'undefined') {
       this.options.retryDelayMs = 500;
     }
 
-    if (typeof this.options.throwRetryExhausted === "undefined") {
+    if (typeof this.options.throwRetryExhausted === 'undefined') {
       this.options.throwRetryExhausted = true;
     }
 
@@ -208,7 +234,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     this.app.use(cors());
     this.app.use(
       express.json({
-        type: "application/x-amz-json-1.1",
+        type: 'application/x-amz-json-1.1',
         limit: this.config?.eventBridgeMockServerConfig.payloadSizeLimit,
       })
     );
@@ -219,21 +245,21 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       })
     );
     this.app.use((_req, res, next) => {
-      res.header("Access-Control-Allow-Origin", "*");
+      res.header('Access-Control-Allow-Origin', '*');
       res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, ETag, X-CSRF-Token, Content-Disposition"
+        'Access-Control-Allow-Headers',
+        'Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, ETag, X-CSRF-Token, Content-Disposition'
       );
       res.header(
-        "Access-Control-Allow-Methods",
-        "PUT, POST, GET, DELETE, HEAD, OPTIONS"
+        'Access-Control-Allow-Methods',
+        'PUT, POST, GET, DELETE, HEAD, OPTIONS'
       );
       next();
     });
 
-    this.app.all("*", async (req, res) => {
+    this.app.all('*', async (req, res) => {
       if (this.mqClient) {
-        this.mqClient.publish("eventBridge", JSON.stringify(req.body.Entries));
+        this.mqClient.publish('eventBridge', JSON.stringify(req.body.Entries));
       }
       res.json(this.generateEventBridgeResponse(req.body.Entries));
       res.status(200).send();
@@ -244,13 +270,27 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     // loop the scheduled events and create a cron for them
     this.scheduledEvents.forEach((scheduledEvent) => {
       cron.schedule(scheduledEvent.schedule, async () => {
-        this.log(`run scheduled function ${scheduledEvent.functionKey}`);
+        this.logDebug(`run scheduled function ${scheduledEvent.functionKey}`);
         this.invokeSubscriber(scheduledEvent.functionKey, {
           Source: `Scheduled function ${scheduledEvent.functionKey}`,
           Resources: [],
           Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
         });
       });
+    });
+  }
+
+  private async setupLocalStack() {
+    const {
+      service: { resources: { Resources } = {} },
+    } = this.serverless;
+
+    await createEventBridgeResources({
+      resources: Resources,
+      config: this.config as Config,
+      subscribers: this.subscribers,
+      logDebug: this.logDebug,
+      logNotice: this.logNotice,
     });
   }
 
@@ -280,7 +320,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     for (const key in Resources) {
       if (
         Object.prototype.hasOwnProperty.call(Resources, key) &&
-        Resources[key].Type === "AWS::Events::EventBus"
+        Resources[key].Type === 'AWS::Events::EventBus'
       ) {
         eventBuses[key] = Resources[key].Properties.Name;
       }
@@ -291,7 +331,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
   invokeSubscribers(entries: any) {
     if (!entries) return [];
-    this.log("checking event subscribers");
+    this.logDebug('checking event subscribers');
 
     const invoked = [];
 
@@ -316,7 +356,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     } = this.options;
 
     if (!this.lambda) {
-      throw new Error("Lambda not present");
+      throw new Error('Lambda not present');
     }
 
     const lambdaFunction = this.lambda.get(functionKey);
@@ -324,12 +364,12 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     lambdaFunction.setEvent(event);
     try {
       await lambdaFunction.runHandler();
-      this.log(
+      this.logDebug(
         `${functionKey} successfully processed event with id ${event.id}`
       );
     } catch (err) {
       if (retry < (maxRetries as number)) {
-        this.log(
+        this.logDebug(
           `error: ${
             (err as Error).message || err
           } occurred in ${functionKey} on ${retry}/${maxRetries}, will retry`
@@ -340,7 +380,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         await this.invokeSubscriber(functionKey, entry, retry + 1);
         return;
       }
-      this.log(
+      this.logDebug(
         `error: ${
           (err as Error).message || err
         } occurred in ${functionKey} on attempt ${retry}, max attempts reached`
@@ -376,18 +416,18 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         subscribedChecks.push(
           this.verifyIfValueMatchesEventBridgePatterns(
             entry,
-            "Source",
+            'Source',
             subscriber.event.pattern.source
           )
         );
       }
 
-      if (entry.DetailType && subscriber.event.pattern["detail-type"]) {
+      if (entry.DetailType && subscriber.event.pattern['detail-type']) {
         subscribedChecks.push(
           this.verifyIfValueMatchesEventBridgePatterns(
             entry,
-            "DetailType",
-            subscriber.event.pattern["detail-type"]
+            'DetailType',
+            subscriber.event.pattern['detail-type']
           )
         );
       }
@@ -417,8 +457,8 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
 
     const subscribed = subscribedChecks.every((x) => x);
-    this.log(
-      `${subscriber.functionKey} ${subscribed ? "is" : "is not"} subscribed`
+    this.logDebug(
+      `${subscriber.functionKey} ${subscribed ? 'is' : 'is not'} subscribed`
     );
     return subscribed;
   }
@@ -457,7 +497,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     pattern: any
   ): any {
     // Simple scalar comparison
-    if (typeof pattern !== "object") {
+    if (typeof pattern !== 'object') {
       if (!(field in object)) {
         return false; // Scalar vs non-existing field => false
       }
@@ -468,15 +508,15 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
 
     // "exists" filters
-    if ("exists" in pattern) {
+    if ('exists' in pattern) {
       return pattern.exists ? field in object : !(field in object);
     }
 
-    if ("anything-but" in pattern) {
+    if ('anything-but' in pattern) {
       return !this.verifyIfValueMatchesEventBridgePattern(
         object,
         field,
-        pattern["anything-but"]
+        pattern['anything-but']
       );
     }
 
@@ -488,11 +528,11 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     const content = object[field];
     const filterType = Object.keys(pattern)[0];
 
-    if (filterType === "prefix") {
+    if (filterType === 'prefix') {
       return content.startsWith(pattern.prefix);
     }
 
-    if ("numeric" in pattern) {
+    if ('numeric' in pattern) {
       // partition an array to be like [[">", 5], ["=",30]]
       const chunk: any = (arr = [], num = 2) => {
         if (arr.length === 0) return arr;
@@ -512,11 +552,11 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
         const isCheckingWithOperation = (
           {
-            ">": lvalue > rvalue,
-            "<": lvalue < rvalue,
-            ">=": lvalue >= rvalue,
-            "<=": lvalue <= rvalue,
-            "=": lvalue === rvalue,
+            '>': lvalue > rvalue,
+            '<': lvalue < rvalue,
+            '>=': lvalue >= rvalue,
+            '<=': lvalue <= rvalue,
+            '=': lvalue === rvalue,
           } as any
         )[operator];
 
@@ -534,17 +574,17 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   }
 
   compareEventBusName(eventBus: any, eventBusName: string) {
-    if (typeof eventBus === "string") {
+    if (typeof eventBus === 'string') {
       return eventBus.includes(eventBusName);
     }
 
     if (
-      Object.prototype.hasOwnProperty.call(eventBus, "Ref") ||
-      Object.prototype.hasOwnProperty.call(eventBus, "Fn::Ref") ||
-      Object.prototype.hasOwnProperty.call(eventBus, "Fn::GetAtt")
+      Object.prototype.hasOwnProperty.call(eventBus, 'Ref') ||
+      Object.prototype.hasOwnProperty.call(eventBus, 'Fn::Ref') ||
+      Object.prototype.hasOwnProperty.call(eventBus, 'Fn::GetAtt')
     ) {
       const resourceName =
-        eventBus.Ref || eventBus["Fn::Ref"] || eventBus["Fn::GetAtt"][0];
+        eventBus.Ref || eventBus['Fn::Ref'] || eventBus['Fn::GetAtt'][0];
 
       if (this.eventBuses[resourceName]) {
         return (
@@ -554,8 +594,8 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       }
     }
 
-    if (Object.prototype.hasOwnProperty.call(eventBus, "Fn::ImportValue")) {
-      const importedResourceName = eventBus["Fn::ImportValue"];
+    if (Object.prototype.hasOwnProperty.call(eventBus, 'Fn::ImportValue')) {
+      const importedResourceName = eventBus['Fn::ImportValue'];
 
       return (
         this.config?.eventBridgeMockServerConfig.importedEventBuses[
@@ -588,7 +628,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         for (const event of functionDefinition.events) {
           if (event.eventBridge) {
             if (
-              typeof (event.eventBridge as any).enabled === "undefined" ||
+              typeof (event.eventBridge as any).enabled === 'undefined' ||
               (event.eventBridge as any).enabled === true
             ) {
               if (!event.eventBridge.schedule) {
@@ -599,22 +639,22 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
               } else {
                 let convertedSchedule;
 
-                if (event.eventBridge.schedule.indexOf("rate") > -1) {
+                if (event.eventBridge.schedule.indexOf('rate') > -1) {
                   const rate = event.eventBridge.schedule
-                    .replace("rate(", "")
-                    .replace(")", "");
+                    .replace('rate(', '')
+                    .replace(')', '');
 
-                  const parts = rate.split(" ");
+                  const parts = rate.split(' ');
 
                   if (parts[1]) {
-                    if (parts[1].startsWith("minute")) {
+                    if (parts[1].startsWith('minute')) {
                       convertedSchedule = `*/${parts[0]} * * * *`;
-                    } else if (parts[1].startsWith("hour")) {
+                    } else if (parts[1].startsWith('hour')) {
                       convertedSchedule = `0 */${parts[0]} * * *`;
-                    } else if (parts[1].startsWith("day")) {
+                    } else if (parts[1].startsWith('day')) {
                       convertedSchedule = `0 0 */${parts[0]} * *`;
                     } else {
-                      this.log(
+                      this.logDebug(
                         `Invalid·schedule·rate·syntax·'${rate}',·will·not·schedule`
                       );
                     }
@@ -630,11 +670,11 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
                     event.eventBridge.schedule.length - 3
                   )}`;
                   // replace ? by * for node-cron
-                  convertedSchedule = convertedSchedule.split("?").join("*");
+                  convertedSchedule = convertedSchedule.split('?').join('*');
                   // replace 0/x by */x for node-cron
                   convertedSchedule = convertedSchedule.replaceAll(
                     /0\//gi,
-                    "*/"
+                    '*/'
                   );
                 }
                 if (convertedSchedule) {
@@ -643,11 +683,11 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
                     event: event.eventBridge,
                     functionKey,
                   });
-                  this.log(
+                  this.logDebug(
                     `Scheduled '${functionKey}' with syntax ${convertedSchedule}`
                   );
                 } else {
-                  this.log(
+                  this.logDebug(
                     `Invalid schedule syntax '${event.eventBridge.schedule}', will not schedule`
                   );
                 }
@@ -668,7 +708,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   convertEntryToEvent(entry: any) {
     try {
       const event: any = {
-        version: "0",
+        version: '0',
         id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
         source: entry.Source,
         account: this.config?.awsConfig.accountId,
@@ -679,12 +719,12 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       };
 
       if (entry.DetailType) {
-        event["detail-type"] = entry.DetailType;
+        event['detail-type'] = entry.DetailType;
       }
 
       return event;
     } catch (error) {
-      this.log(
+      this.logDebug(
         `error converting entry to event: ${
           (error as Error).message
         }. returning entry instead`
@@ -696,7 +736,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
   }
 
-  flattenObject(object: any, prefix = ""): any {
+  flattenObject(object: any, prefix = ''): any {
     return Object.entries(object).reduce(
       (accumulator, [key, value]) =>
         value &&
@@ -712,12 +752,16 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     );
   }
 
-  log(message: string) {
+  logDebug(message: string) {
     if (this.config?.pluginConfigOptions?.debug) {
       this.logging.log.notice(
-        `serverless-offline-aws-eventbridge :: ${message}`
+        `serverless-offline-aws-eventbridge [DEBUG] :: ${message}`
       );
     }
+  }
+
+  logNotice(message: string) {
+    this.logging.log.notice(`serverless-offline-aws-eventbridge :: ${message}`);
   }
 }
 

@@ -8,7 +8,7 @@ export function removeEmpty<T = any>(data: T): T {
   // map through all the remaining properties and check if the value is an object.
   // if value is object, use recursion to remove empty properties
   const clean = entries.map(([key, v]) => {
-    const value = typeof v === "object" ? removeEmpty(v) : v;
+    const value = typeof v === 'object' ? removeEmpty(v) : v;
     return [key, value];
   });
 

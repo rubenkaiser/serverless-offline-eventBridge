@@ -1,3 +1,5 @@
+import { LocalStackPluginConfig } from './localstack-plugin-config-interface';
+
 export interface EventBridgePluginConfigOptions {
   port?: number;
   mockEventBridgeServer?: boolean;
@@ -9,5 +11,6 @@ export interface EventBridgePluginConfigOptions {
   retryDelayMs?: number;
   throwRetryExhausted?: boolean;
   payloadSizeLimit?: string;
-  "imported-event-buses"?: { [key: string]: string };
+  'imported-event-buses'?: { [key: string]: string };
+  localStackConfig?: LocalStackPluginConfig;
 }

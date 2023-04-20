@@ -1,9 +1,9 @@
 /* eslint-disable class-methods-use-this */
 /* eslint-disable import/prefer-default-export */
 
-declare module "serverless-offline/lambda" {
+declare module 'serverless-offline/lambda' {
   export class Lambda {
-    functionKey = "";
+    functionKey = '';
 
     #httpServer = null;
 
