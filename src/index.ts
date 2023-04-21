@@ -19,6 +19,7 @@ import { Config } from './config/interfaces/config-interface';
 import { setConfig } from './config/config';
 import { Subscriber } from './types/subscriber-interface';
 import { createEventBridgeResources } from './integrations/localstack';
+import { ServerlessResourceTypes } from './utils/serverless';
 
 class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
   public hooks: Hooks;
@@ -320,7 +321,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     for (const key in Resources) {
       if (
         Object.prototype.hasOwnProperty.call(Resources, key) &&
-        Resources[key].Type === 'AWS::Events::EventBus'
+        Resources[key].Type === ServerlessResourceTypes.EVENT_BUS
       ) {
         eventBuses[key] = Resources[key].Properties.Name;
       }

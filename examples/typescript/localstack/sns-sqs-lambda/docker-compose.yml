@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  localstack:
+    image: localstack/localstack
+    container_name: localstack_dev
+    ports:
+      - '4566:4566'
+      - '4571:4571'
+    environment:
+      - SERVICES=events, sns, sqs
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOST_TMP_FOLDER=${TMPDIR}
+    volumes:
+      - ./aws-localstack/tmp/localstack:/var/lib/localstack
+      - ./aws-localstack:/opt/localstack/
+networks:
+  default:
+    name: 'localstack'

@@ -1,40 +1,59 @@
 import { EventBridgeClient } from '@aws-sdk/client-eventbridge';
+import { CloudFormationResources } from 'serverless/aws';
 import { Subscriber } from '../../../types/subscriber-interface';
 import { createEventBus, listAllBuses } from '../utils';
+import {
+  ServerlessResourceTypes,
+  filterResources,
+} from '../../../utils/serverless';
 
 export interface CreateEventBusesParams {
   eventBridgeClient: EventBridgeClient;
   subscribers: Array<Subscriber>;
+  resources: CloudFormationResources;
   logDebug: (message: string) => void;
 }
 
 export async function createEventBuses({
   subscribers,
+  resources,
   eventBridgeClient,
   logDebug,
 }: CreateEventBusesParams) {
+  const eventBusesResources = filterResources(
+    resources,
+    ServerlessResourceTypes.EVENT_BUS
+  );
+
   const allExistingBuses = await listAllBuses({
     client: eventBridgeClient,
   });
 
-  const notExistingBuses = subscribers.reduce<Set<{ eventBusName: string }>>(
-    (accumulator, currSubscriber) => {
-      const doesNotExist = !allExistingBuses.some((existingBus) => {
-        return subscribers.some(
-          (subFunc) => existingBus.Name === subFunc.event.eventBus
-        );
+  const allDefinedBuses = [
+    ...subscribers.map((subFunc) => subFunc.event.eventBus as string),
+    ...eventBusesResources.map(
+      (busResource) =>
+        busResource.resourceDefinition.Properties['Name'] as string
+    ),
+  ];
+
+  const notExistingBuses = allDefinedBuses.reduce<
+    Set<{ eventBusName: string }>
+  >((accumulator, currBus) => {
+    const doesNotExist = !allExistingBuses.some((existingBus) => {
+      return allDefinedBuses.some(
+        (definedBus) => existingBus.Name === definedBus
+      );
+    });
+
+    if (doesNotExist) {
+      accumulator.add({
+        eventBusName: currBus,
       });
+    }
 
-      if (doesNotExist) {
-        accumulator.add({
-          eventBusName: currSubscriber.event.eventBus as string,
-        });
-      }
-
-      return accumulator;
-    },
-    new Set()
-  );
+    return accumulator;
+  }, new Set());
 
   logDebug(`Not existing buses: ${JSON.stringify([...notExistingBuses])}`);
 

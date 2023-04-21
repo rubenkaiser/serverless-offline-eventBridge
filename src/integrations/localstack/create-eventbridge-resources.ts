@@ -30,6 +30,7 @@ export async function createEventBridgeResources({
   await createEventBuses({
     eventBridgeClient,
     subscribers,
+    resources,
     logDebug,
   });
 

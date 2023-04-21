@@ -2,7 +2,7 @@
   "name": "serverless-offline-aws-eventbridge",
   "version": "2.1.0",
   "description": "Serverless plugin to run event bridge offline. Localstack support.",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "author": "Ruben Kaiser",
   "license": "MIT",
   "scripts": {
