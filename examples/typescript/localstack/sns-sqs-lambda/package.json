@@ -1,0 +1,31 @@
+{
+  "name": "sns-sqs-lambda",
+  "version": "1.0.0",
+  "description": "Serverless eventbridge->sns->sqs-> lambda example with use of localstack",
+  "main": "serverless.ts",
+  "scripts": {
+    "start": "serverless offline start --config serverless.ts",
+    "ts-node": "ts-node",
+    "test": "ts-node ./test/test-script.ts"
+  },
+  "engines": {
+    "node": ">=14.15.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@aws-sdk/client-eventbridge": "^3.316.0",
+    "@serverless/typescript": "^3.29.0",
+    "@types/aws-lambda": "^8.10.71",
+    "@types/node": "^14.14.25",
+    "esbuild": "^0.17.17",
+    "serverless": "^3.27.0",
+    "serverless-esbuild": "^1.43.1",
+    "serverless-offline": "^12.0.4",
+    "serverless-offline-sns": "0.74.0",
+    "serverless-offline-sqs": "^7.3.2",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^4.9.5"
+  },
+  "license": "MIT"
+}

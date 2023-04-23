@@ -209,6 +209,34 @@ custom:
 
 If your existing EventBridge is mocked on a different host/IP (e.g. When stacks are hosted in Docker containers), then you will also need to specify a `hostname`. If using Docker, you should use the name of the container that mocks the EventBridge (assuming both containers are on the same Docker network).
 
+## Localstack
+Plugin is capable of working against locally running docker container of localstack. For example look in [sns-sqs-lambda](examples/typescript//localstack//sns-sqs-lambda/README.md)
+
+**IMPORTANT**
+Right now you can run this plugin in "mock server" mode or in localstack mode. By configuring localstack section in your config mock server will not be running.
+
+To configure localstack add configuration:
+```YAML
+custom:
+  serverless-offline-aws-eventbridge:
+    localStackConfig:
+      localStackEndpoint: http://localhost:4566
+```
+
+Or in TypeScript
+```typescript
+'serverless-offline-aws-eventbridge': {
+      localStackConfig: {
+        localStackEndpoint: 'http://localhost:4566',
+      },
+    }
+```
+
+For complete guide look in to [TypeScript Localstack example](./examples//typescript//localstack/sns-sqs-lambda).
+
+### Currently supported targets
+- [SNS](./examples//typescript//localstack//sns-sqs-lambda//README.md#L7)
+
 ## Examples
 
 Two stacks are provided as example:
