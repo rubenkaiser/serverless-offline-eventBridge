@@ -379,9 +379,6 @@ export default class ServerlessOfflineAwsEventbridgePlugin {
     }
 
     if ("anything-but" in pattern) {
-      if (Array.isArray(pattern['anything-but'])) {
-        return !pattern['anything-but'].includes(object[field]);
-      }
       return !this.verifyIfValueMatchesEventBridgePattern(
         object,
         field,
