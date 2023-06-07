@@ -556,7 +556,9 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
 
     if (filterType === 'equals-ignore-case') {
-      return content.toLowerCase() === pattern['equals-ignore-case'].toLowerCase();
+      return (
+        content.toLowerCase() === pattern['equals-ignore-case'].toLowerCase()
+      );
     }
 
     if ('numeric' in pattern) {
