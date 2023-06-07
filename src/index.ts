@@ -555,6 +555,10 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       return content.startsWith(pattern.prefix);
     }
 
+    if (filterType === 'equals-ignore-case') {
+      return content.toLowerCase() === pattern['equals-ignore-case'].toLowerCase();
+    }
+
     if ('numeric' in pattern) {
       // partition an array to be like [[">", 5], ["=",30]]
       const chunk: any = (arr = [], num = 2) => {
