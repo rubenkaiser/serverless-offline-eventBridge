@@ -441,18 +441,37 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
           subscriber.event.pattern.detail
         );
 
-        // check for existence of every value in the pattern in the provided value
-        // eslint-disable-next-line no-restricted-syntax
-        for (const [key, value] of Object.entries(
-          flattenedPatternDetailObject
-        )) {
+        if ('$or' in flattenedPatternDetailObject) {
+          // check for existence of any value in the pattern in the provided value
           subscribedChecks.push(
-            this.verifyIfValueMatchesEventBridgePatterns(
-              flattenedDetailObject,
-              key,
-              value
-            )
+            flattenedPatternDetailObject['$or'].some((pattern: unknown) => {
+              const flattenedPatternDetailObjectOr =
+                this.flattenObject(pattern);
+
+              return Object.entries(flattenedPatternDetailObjectOr).every(
+                ([key, value]) =>
+                  this.verifyIfValueMatchesEventBridgePatterns(
+                    flattenedDetailObject,
+                    key,
+                    value
+                  )
+              );
+            })
           );
+        } else {
+          // check for existence of every value in the pattern in the provided value
+          // eslint-disable-next-line no-restricted-syntax
+          for (const [key, value] of Object.entries(
+            flattenedPatternDetailObject
+          )) {
+            subscribedChecks.push(
+              this.verifyIfValueMatchesEventBridgePatterns(
+                flattenedDetailObject,
+                key,
+                value
+              )
+            );
+          }
         }
       }
     }
