@@ -160,7 +160,7 @@ functions:
               age: [ { "exists": true } ]
 ```
 
-The `cidr` and `numeric` filters are yet to be implemented.
+The `cidr` filter is yet to be implemented.
 
 ## Using CloudFormation intrinsic functions
 

@@ -1,18 +1,19 @@
 /* eslint-disable import/no-import-module-exports */
 import type Serverless from 'serverless';
-import type { Hooks, Logging } from 'serverless/classes/Plugin';
 import type Plugin from 'serverless/classes/Plugin';
 import type { Express } from 'express';
+import * as express from 'express';
 import type { Server } from 'http';
 
+import { Hooks, Logging } from 'serverless/classes/Plugin';
 import type { Lambda as LambdaType } from 'serverless-offline/lambda';
 import { createServer, Server as netServer } from 'net';
 import * as Aedes from 'aedes';
 import * as cors from 'cors';
-import * as express from 'express';
 import * as mqtt from 'mqtt';
 import * as cron from 'node-cron';
 import { EventBridge } from 'serverless/plugins/aws/provider/awsProvider';
+import * as jsonpath from 'jsonpath';
 import { EventBridgePluginConfigOptions } from './types/event-bridge-plugin-options-interface';
 import { PluginOptions } from './types/plugin-options-interface';
 import { Config } from './config/interfaces/config-interface';
@@ -435,8 +436,6 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
       if (entry.Detail && subscriber.event.pattern.detail) {
         const detail = JSON.parse(entry.Detail);
-
-        const flattenedDetailObject = this.flattenObject(detail);
         const flattenedPatternDetailObject = this.flattenObject(
           subscriber.event.pattern.detail
         );
@@ -451,7 +450,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
               return Object.entries(flattenedPatternDetailObjectOr).every(
                 ([key, value]) =>
                   this.verifyIfValueMatchesEventBridgePatterns(
-                    flattenedDetailObject,
+                    detail,
                     key,
                     value
                   )
@@ -465,11 +464,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
             flattenedPatternDetailObject
           )) {
             subscribedChecks.push(
-              this.verifyIfValueMatchesEventBridgePatterns(
-                flattenedDetailObject,
-                key,
-                value
-              )
+              this.verifyIfValueMatchesEventBridgePatterns(detail, key, value)
             );
           }
         }
@@ -516,48 +511,51 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     field: any,
     pattern: any
   ): any {
+    const splitField = field.split('.');
+    const requiredJsonPathString = splitField.reduce(
+      (accumulator: string, currentField: string) => {
+        const objectPath = `${accumulator}.${currentField}`;
+        const arrayPath = `${objectPath}[:]`;
+        return jsonpath.query(object, arrayPath, 1).length > 0
+          ? arrayPath
+          : objectPath;
+      },
+      '$'
+    );
+
+    // evaluatedValues will ALWAYS be an array, since it's the result of a jsonpath query.
+    const evaluatedValues = jsonpath.query(object, requiredJsonPathString);
+    this.logDebug(`Evaluating ${requiredJsonPathString}`);
+
     // Simple scalar comparison
     if (typeof pattern !== 'object') {
-      if (!(field in object)) {
-        return false; // Scalar vs non-existing field => false
-      }
-      if (Array.isArray(object[field])) {
-        return object[field].includes(pattern);
-      }
-      return object[field] === pattern;
+      return evaluatedValues.includes(pattern);
     }
 
     // "exists" filters
     if ('exists' in pattern) {
-      return pattern.exists ? field in object : !(field in object);
+      return pattern.exists
+        ? evaluatedValues.length > 0
+        : evaluatedValues.length === 0;
     }
 
     if ('anything-but' in pattern) {
-      if (Array.isArray(pattern['anything-but'])) {
-        return !pattern['anything-but'].includes(object[field]);
-      }
-      return !this.verifyIfValueMatchesEventBridgePattern(
-        object,
-        field,
-        pattern['anything-but']
-      );
+      const evaluatePattern = Array.isArray(pattern['anything-but'])
+        ? pattern['anything-but']
+        : [pattern['anything-but']];
+      return !evaluatePattern.includes(evaluatedValues);
     }
 
-    // At this point, result is assumed false is the field does not actually exists
-    if (!(field in object)) {
-      return false;
-    }
-
-    const content = object[field];
     const filterType = Object.keys(pattern)[0];
 
     if (filterType === 'prefix') {
-      return content.startsWith(pattern.prefix);
+      return evaluatedValues.some((value) => value.startsWith(pattern.prefix));
     }
 
     if (filterType === 'equals-ignore-case') {
-      return (
-        content.toLowerCase() === pattern['equals-ignore-case'].toLowerCase()
+      return evaluatedValues.some(
+        (value) =>
+          value.toLowerCase() === pattern['equals-ignore-case'].toLowerCase()
       );
     }
 
@@ -573,26 +571,24 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
       const operationGroups = chunk(origin, 2);
 
-      // Expected all event pattern should be true
-      const isValid = operationGroups.every((arr: any) => {
-        const lvalue = parseFloat(content);
-        const rvalue = parseFloat(arr[arr.length - 1]);
-        const operator = arr[0];
+      return evaluatedValues.some((value: any) =>
+        // Expected all event pattern should be true
+        operationGroups.every((arr: any) => {
+          const lvalue = parseFloat(value);
+          const rvalue = parseFloat(arr[arr.length - 1]);
+          const operator = arr[0];
 
-        const isCheckingWithOperation = (
-          {
-            '>': lvalue > rvalue,
-            '<': lvalue < rvalue,
-            '>=': lvalue >= rvalue,
-            '<=': lvalue <= rvalue,
-            '=': lvalue === rvalue,
-          } as any
-        )[operator];
-
-        return isCheckingWithOperation;
-      });
-
-      return isValid;
+          return (
+            {
+              '>': lvalue > rvalue,
+              '<': lvalue < rvalue,
+              '>=': lvalue >= rvalue,
+              '<=': lvalue <= rvalue,
+              '=': lvalue === rvalue,
+            } as any
+          )[operator];
+        })
+      );
     }
 
     // "cidr" filters and the recurring logic are yet supported by this plugin.
