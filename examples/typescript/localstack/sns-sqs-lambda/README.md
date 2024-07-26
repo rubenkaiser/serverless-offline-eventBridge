@@ -16,8 +16,8 @@ Why like this? EventBridge rules are limited to 300 and each rule targets are li
 Usually developers get around them by adding SNS as target since SNS does not have such a limitation and can send message to as many subscribers as it wants to.
 
 Integrations between SNS -> SQS -> Lambda are achieved with use of offline plugins:
-- [serverless-offline-sns](package.json#L24)
-- [serverless-offline-sqs](package.json#L25)
+- [serverless-offline-sns](package.json#L23)
+- [serverless-offline-sqs-external](package.json#L24)
 
 ## Docker
 Look in to [docker-compose.yml](docker-compose.yml) for example of localstack configuration.

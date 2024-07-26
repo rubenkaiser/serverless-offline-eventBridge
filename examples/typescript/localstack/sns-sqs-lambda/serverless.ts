@@ -11,7 +11,7 @@ const serverlessConfiguration: AWS = {
   plugins: [
     'serverless-esbuild',
     'serverless-offline',
-    'serverless-offline-sqs',
+    'serverless-offline-sqs-external',
     'serverless-offline-sns',
     // 'serverless-offline-aws-eventbridge',
     /** Remember to build plugin on top of repository */
@@ -101,10 +101,10 @@ const serverlessConfiguration: AWS = {
         },
       ],
     },
-    'serverless-offline-sqs': {
+    'serverless-offline-sqs-external': {
       autoCreate: true,
       apiVersion: '2012-11-05',
-      endpoint: 'http://0.0.0.0:4566',
+      endpoint: 'http://localhost:4566',
       region: AWS_DEFAULT_REGION,
       accessKeyId: 'root',
       secretAccessKey: 'root',
