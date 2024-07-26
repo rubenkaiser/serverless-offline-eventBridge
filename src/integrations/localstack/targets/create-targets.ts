@@ -44,6 +44,7 @@ export async function createTargets({
   const existingTargetsForRule = await listRuleTargets({
     client: eventBridgeClient,
     ruleName: rule.Name as string,
+    eventBusName: rule.EventBusName,
   });
 
   const definedRuleTargets: Array<RoleResourceTarget> =
@@ -109,6 +110,7 @@ export async function createTargets({
   await createRuleTargets({
     client: eventBridgeClient,
     ruleName: rule.Name as string,
+    eventBusName: rule.EventBusName,
     targets: ruleTargets,
   });
 
