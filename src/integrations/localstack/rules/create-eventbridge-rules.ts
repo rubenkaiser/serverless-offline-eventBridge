@@ -50,7 +50,13 @@ export async function createEventBridgeRules({
           (existingRule) => existingRule.Name === ruleProperties.Name
         );
 
-        if (doesNotExist) {
+        const isBusMatch =
+          (!ruleProperties.EventBusName && bus.Name === 'default') ||
+          (ruleProperties.EventBusName &&
+            (ruleProperties.EventBusName === bus.Name ||
+              ruleProperties.EventBusName === bus.Arn));
+
+        if (doesNotExist && isBusMatch) {
           accumulator.add(ruleProperties);
         }
 

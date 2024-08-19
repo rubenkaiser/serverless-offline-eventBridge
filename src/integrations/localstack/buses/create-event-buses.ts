@@ -14,6 +14,15 @@ export interface CreateEventBusesParams {
   logDebug: (message: string) => void;
 }
 
+function normalizeEventBusName(eventBus: string) {
+  // if busName is actually the arn, normalize it to just the name
+  if (eventBus.toLowerCase().startsWith('arn:')) {
+    return eventBus.split('/')[1];
+  }
+
+  return eventBus;
+}
+
 export async function createEventBuses({
   subscribers,
   resources,
@@ -30,30 +39,32 @@ export async function createEventBuses({
   });
 
   const allDefinedBuses = [
-    ...subscribers.map((subFunc) => subFunc.event.eventBus as string),
-    ...eventBusesResources.map(
-      (busResource) =>
+    ...subscribers.map((subFunc) =>
+      normalizeEventBusName(subFunc.event.eventBus as string)
+    ),
+    ...eventBusesResources.map((busResource) =>
+      normalizeEventBusName(
         busResource.resourceDefinition.Properties['Name'] as string
+      )
     ),
   ];
 
-  const notExistingBuses = allDefinedBuses.reduce<
-    Set<{ eventBusName: string }>
-  >((accumulator, currBus) => {
-    const doesNotExist = !allExistingBuses.some((existingBus) => {
-      return allDefinedBuses.some(
-        (definedBus) => existingBus.Name === definedBus
-      );
-    });
-
-    if (doesNotExist) {
-      accumulator.add({
-        eventBusName: currBus,
+  const notExistingBuses = allDefinedBuses.reduce<Set<string>>(
+    (accumulator, currBus) => {
+      const doesNotExist = !allExistingBuses.some((existingBus) => {
+        return allDefinedBuses.some(
+          (definedBus) => existingBus.Name === definedBus
+        );
       });
-    }
 
-    return accumulator;
-  }, new Set());
+      if (doesNotExist) {
+        accumulator.add(currBus);
+      }
+
+      return accumulator;
+    },
+    new Set()
+  );
 
   logDebug(`Not existing buses: ${JSON.stringify([...notExistingBuses])}`);
 
@@ -61,10 +72,10 @@ export async function createEventBuses({
     [...notExistingBuses].map(async (notExistingBus) => {
       const createdBus = await createEventBus({
         client: eventBridgeClient,
-        name: notExistingBus.eventBusName,
+        name: notExistingBus,
       });
 
-      return { createdBusName: notExistingBus.eventBusName, arn: createdBus };
+      return { createdBusName: notExistingBus, arn: createdBus };
     })
   );
 
