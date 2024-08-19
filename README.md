@@ -25,7 +25,6 @@ Note: if you are running Serverless-(offline) < 10 you need the a version < 2.0.
 Let serverless know about the plugin, also note the order when combined with serverless webpack and offline
 ```YAML
 plugins:
-  - serverless-webpack
   - serverless-offline
   - serverless-offline-aws-eventbridge
 ```
