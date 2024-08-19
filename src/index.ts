@@ -12,7 +12,10 @@ import * as Aedes from 'aedes';
 import * as cors from 'cors';
 import * as mqtt from 'mqtt';
 import * as cron from 'node-cron';
-import { EventBridge } from 'serverless/plugins/aws/provider/awsProvider';
+import {
+  EventBridge,
+  Input,
+} from 'serverless/plugins/aws/provider/awsProvider';
 import * as jsonpath from 'jsonpath';
 import { EventBridgePluginConfigOptions } from './types/event-bridge-plugin-options-interface';
 import { PluginOptions } from './types/plugin-options-interface';
@@ -273,11 +276,15 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     this.scheduledEvents.forEach((scheduledEvent) => {
       cron.schedule(scheduledEvent.schedule, async () => {
         this.logDebug(`run scheduled function ${scheduledEvent.functionKey}`);
-        this.invokeSubscriber(scheduledEvent.functionKey, {
-          Source: `Scheduled function ${scheduledEvent.functionKey}`,
-          Resources: [],
-          Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
-        });
+        this.invokeSubscriber(
+          scheduledEvent.functionKey,
+          {
+            Source: `Scheduled function ${scheduledEvent.functionKey}`,
+            Resources: [],
+            Detail: `{ "name": "Scheduled function ${scheduledEvent.functionKey}"}`,
+          },
+          scheduledEvent.event?.input
+        );
       });
     });
   }
@@ -340,17 +347,25 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     // eslint-disable-next-line no-restricted-syntax
     for (const entry of entries) {
       // eslint-disable-next-line no-restricted-syntax
-      for (const { functionKey } of this.subscribers.filter((subscriber) =>
+      for (const {
+        functionKey,
+        event: { input } = { input: undefined },
+      } of this.subscribers.filter((subscriber) =>
         this.verifyIsSubscribed(subscriber, entry)
       )) {
-        invoked.push(this.invokeSubscriber(functionKey, entry));
+        invoked.push(this.invokeSubscriber(functionKey, entry, input));
       }
     }
 
     return invoked;
   }
 
-  async invokeSubscriber(functionKey: any, entry: any, retry = 0) {
+  async invokeSubscriber(
+    functionKey: any,
+    entry: any,
+    input: Input | undefined,
+    retry = 0
+  ) {
     const {
       retryDelayMs,
       maximumRetryAttempts: maxRetries,
@@ -362,7 +377,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     }
 
     const lambdaFunction = this.lambda.get(functionKey);
-    const event = this.convertEntryToEvent(entry);
+    const event = this.convertEntryAndInputToEvent(entry, input);
     lambdaFunction.setEvent(event);
     try {
       await lambdaFunction.runHandler();
@@ -379,7 +394,7 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
         await new Promise((resolve) => {
           setTimeout(resolve, retryDelayMs);
         });
-        await this.invokeSubscriber(functionKey, entry, retry + 1);
+        await this.invokeSubscriber(functionKey, entry, input, retry + 1);
         return;
       }
       this.logDebug(
@@ -730,9 +745,10 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
     };
   }
 
-  convertEntryToEvent(entry: any) {
+  convertEntryAndInputToEvent(entry: any, input: Input | undefined) {
     try {
       const event: any = {
+        ...(input || {}),
         version: '0',
         id: `xxxxxxxx-xxxx-xxxx-xxxx-${new Date().getTime()}`,
         source: entry.Source,
