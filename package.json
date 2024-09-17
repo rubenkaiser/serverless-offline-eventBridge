@@ -38,7 +38,7 @@
     "aedes": "^0.49.0",
     "cors": "^2.8.5",
     "deepmerge": "^4.3.1",
-    "express": "^4.18.2",
+    "express": "^4.21.0",
     "jsonpath": "^1.1.1",
     "mqtt": "^4.3.7",
     "node-cron": "^3.0.2"
