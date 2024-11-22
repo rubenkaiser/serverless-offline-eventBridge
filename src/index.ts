@@ -567,6 +567,10 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       return evaluatedValues.some((value) => value.startsWith(pattern.prefix));
     }
 
+    if (filterType === 'suffix') {
+      return evaluatedValues.some((value) => value.endsWith(pattern.suffix));
+    }
+
     if (filterType === 'equals-ignore-case') {
       return evaluatedValues.some(
         (value) =>

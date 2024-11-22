@@ -139,6 +139,7 @@ https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns-conte
 
 This plugin supports the most common patterns:
 * `prefix`
+* `suffix`
 * `anything-but`
 * `exists`
 
@@ -156,6 +157,7 @@ functions:
               - { "anything-but": "deleted" }
             detail:
               firstname: [ { "prefix": "John" } ]
+              occupation: [ { "suffix": "man" } ]
               age: [ { "exists": true } ]
 ```
 
