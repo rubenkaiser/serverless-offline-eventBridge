@@ -24,8 +24,8 @@ functions:
       - eventBridge:
           eventBus: marketing
           pattern:
-            source:
-              - acme.newsletter.campaign
+            source: [{ 'anything-but': ['com.example.pepe'] }]
+              # - acme.newsletter.campaign
 
 custom:
   serverless-offline-aws-eventbridge:

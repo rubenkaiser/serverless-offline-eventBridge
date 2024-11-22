@@ -264,9 +264,12 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
 
     this.app.all('*', async (req, res) => {
       if (this.mqClient) {
-        this.mqClient.publish('eventBridge', JSON.stringify(req.body.Entries));
+        this.mqClient.publish(
+          'eventBridge',
+          JSON.stringify(req.body?.Entries || [])
+        );
       }
-      res.json(this.generateEventBridgeResponse(req.body.Entries));
+      res.json(this.generateEventBridgeResponse(req.body?.Entries || []));
       res.status(200).send();
     });
   }
@@ -558,7 +561,8 @@ class ServerlessOfflineAwsEventBridgePlugin implements Plugin {
       const evaluatePattern = Array.isArray(pattern['anything-but'])
         ? pattern['anything-but']
         : [pattern['anything-but']];
-      return !evaluatePattern.includes(evaluatedValues);
+      // return !evaluatePattern.includes(evaluatedValues);
+      return !evaluatedValues.some((v) => evaluatePattern.includes(v));
     }
 
     const filterType = Object.keys(pattern)[0];

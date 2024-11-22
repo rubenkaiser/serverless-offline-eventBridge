@@ -1,7 +1,7 @@
 {
   "devDependencies": {
     "aws-sdk": "^2.884.0",
-    "serverless-offline": "^6.8.0",
-    "serverless-offline-aws-eventbridge": "github:damien-thiesson/serverless-offline-eventBridge#mq-proxy"
+    "serverless-offline": "^10.0.0",
+    "serverless-offline-aws-eventbridge": "^2.2.2"
   }
 }

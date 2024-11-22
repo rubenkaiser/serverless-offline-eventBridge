@@ -14,7 +14,7 @@ exports.publish = async () => {
       Entries: [
         {
           EventBusName: 'marketing',
-          Source: 'acme.newsletter.campaign',
+          Source: 'com.example.pepe',
           DetailType: 'UserSignUp',
           Detail: `{ "E-Mail": "some@someemail.some" }`,
         },
